@@ -48,3 +48,14 @@ ui-debug.log
 
 # TypeScript
 *.tsbuildinfo
+
+# Test files with sensitive data
+test-*.cjs
+test-*.js
+test-*.ts
+
+# API Keys and credentials
+*.key
+*.pem
+*-key.json
+credentials.json
