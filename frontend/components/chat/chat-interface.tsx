@@ -12,8 +12,9 @@ import { ProductGrid } from './product-grid';
 import { ShoppingCart } from './shopping-cart';
 import { CheckoutModal } from './checkout-modal';
 import { TypingIndicator } from './typing-indicator';
-import { handleUserMessage } from '@/lib/utils/message-handler';
 import { useSpeechRecognition, useSpeechSynthesis } from '@/lib/hooks';
+import { generateQuickReplies, areRequiredParamsCollected } from '@/lib/utils/quick-replies-generator';
+import { sendChatMessage } from '@/lib/services/chat-api.service';
 import type { MCPProduct } from '@/types';
 import Image from 'next/image';
 
@@ -74,73 +75,89 @@ export function ChatInterface() {
     // Показываем индикатор загрузки
     setLoading(true);
 
-    // Небольшая задержка для реалистичности
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      // Вызываем Firebase Function для получения ответа
+      const response = await sendChatMessage(session.messages.concat([{
+        id: Date.now().toString(),
+        role: 'user',
+        content,
+        timestamp: new Date(),
+      }]), session.params);
 
-    // Обрабатываем сообщение с помощью утилиты
-    const response = handleUserMessage(content, session.params, session.mode);
+      // Обновляем параметры, если были извлечены
+      if (response.extractedParams) {
+        Object.entries(response.extractedParams).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            updateParam(key as any, value);
+          }
+        });
+      }
 
-    // Обновляем параметр, если нужно
-    if (response.updatedParam) {
-      updateParam(response.updatedParam.key, response.updatedParam.value);
-    }
+      // Генерируем быстрые ответы на основе текущих параметров
+      const updatedParams = { ...session.params, ...response.extractedParams };
+      const quickReplies = generateQuickReplies(updatedParams);
 
-    // Переключаем режим, если все параметры собраны
-    if (response.shouldFetchProducts && session.mode === 'consultation') {
-      switchMode('search');
-    }
+      // Проверяем собраны ли все параметры
+      const shouldFetchProducts = areRequiredParamsCollected(updatedParams);
 
-    // Загружаем товары, если нужно
-    if (response.shouldFetchProducts) {
-      // TODO: Здесь будет вызов MCP API
-      // Пока используем моковые данные
-      const mockProducts: MCPProduct[] = [
-        {
-          id: '1',
-          name: 'Букет "Розовая нежность"',
-          price: { final_price: 2890, original_price: 3200, discount: 10 },
-          main_image: 'https://images.unsplash.com/photo-1694796152188-497671aac01c?w=400',
-          shop_public_uuid: 'shop-1',
-          parent_category_slug: 'bouquets',
-          in_stock: true,
-        },
-        {
-          id: '2',
-          name: 'Тюльпаны весенние',
-          price: { final_price: 1990 },
-          main_image: 'https://images.unsplash.com/photo-1580403072903-36afa4f4c9f6?w=400',
-          shop_public_uuid: 'shop-2',
-          parent_category_slug: 'bouquets',
-          in_stock: true,
-        },
-        {
-          id: '3',
-          name: 'Лилии элегантные',
-          price: { final_price: 3490 },
-          main_image: 'https://images.unsplash.com/photo-1709773628837-94e63fea4769?w=400',
-          shop_public_uuid: 'shop-3',
-          parent_category_slug: 'bouquets',
-          in_stock: true,
-        },
-        {
-          id: '4',
-          name: 'Пионы розовые',
-          price: { final_price: 4290 },
-          main_image: 'https://images.unsplash.com/photo-1656056970279-0cdd04b60434?w=400',
-          shop_public_uuid: 'shop-4',
-          parent_category_slug: 'bouquets',
-          in_stock: true,
-        },
-      ];
+      // Если все параметры собраны - загружаем товары
+      if (shouldFetchProducts && session.mode === 'consultation') {
+        switchMode('search');
 
+        // TODO: Здесь будет вызов MCP API
+        // Пока используем моковые данные
+        const mockProducts: MCPProduct[] = [
+          {
+            id: '1',
+            name: 'Букет "Розовая нежность"',
+            price: { final_price: 2890, original_price: 3200, discount: 10 },
+            main_image: 'https://images.unsplash.com/photo-1694796152188-497671aac01c?w=400',
+            shop_public_uuid: 'shop-1',
+            parent_category_slug: 'bouquets',
+            in_stock: true,
+          },
+          {
+            id: '2',
+            name: 'Тюльпаны весенние',
+            price: { final_price: 1990 },
+            main_image: 'https://images.unsplash.com/photo-1580403072903-36afa4f4c9f6?w=400',
+            shop_public_uuid: 'shop-2',
+            parent_category_slug: 'bouquets',
+            in_stock: true,
+          },
+          {
+            id: '3',
+            name: 'Лилии элегантные',
+            price: { final_price: 3490 },
+            main_image: 'https://images.unsplash.com/photo-1709773628837-94e63fea4769?w=400',
+            shop_public_uuid: 'shop-3',
+            parent_category_slug: 'bouquets',
+            in_stock: true,
+          },
+          {
+            id: '4',
+            name: 'Пионы розовые',
+            price: { final_price: 4290 },
+            main_image: 'https://images.unsplash.com/photo-1656056970279-0cdd04b60434?w=400',
+            shop_public_uuid: 'shop-4',
+            parent_category_slug: 'bouquets',
+            in_stock: true,
+          },
+        ];
+
+        setLoading(false);
+        addMessage(response.message, 'assistant', { products: mockProducts });
+        return;
+      }
+
+      // Добавляем ответ ассистента с быстрыми ответами
       setLoading(false);
-      addMessage(response.text, 'assistant', { products: mockProducts });
-      return;
+      addMessage(response.message, 'assistant', { quickReplies });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setLoading(false);
+      addMessage('Извините, произошла ошибка. Попробуйте еще раз.', 'assistant');
     }
-
-    // Добавляем ответ ассистента
-    setLoading(false);
-    addMessage(response.text, 'assistant', { quickReplies: response.quickReplies });
   };
 
   // Обработка быстрого ответа
