@@ -45,7 +45,7 @@ export function ChatInput({
                 onKeyPress={handleKeyPress}
                 placeholder="Сообщение AI ассистенту..."
                 disabled={disabled}
-                className="pr-10 py-6 border-gray-300 rounded-3xl focus:ring-2 focus:ring-gray-300 focus:border-transparent resize-none"
+                className="pr-10 py-3 border-gray-300 rounded-3xl focus:ring-2 focus:ring-gray-300 focus:border-transparent resize-none"
               />
               {onVoiceInput && (
                 <Button

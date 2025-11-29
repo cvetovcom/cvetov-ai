@@ -185,7 +185,32 @@ export function ChatInterface() {
 
   // Обработка голосового ввода
   const handleVoiceInput = () => {
+    // Если чат ещё не открыт, открываем и добавляем приветствие
+    if (!showChat) {
+      handleStartChat();
+    }
     toggleListening();
+  };
+
+  // Начать чат с приветственным сообщением
+  const handleStartChat = () => {
+    setShowChat(true);
+
+    // Добавляем приветственное сообщение, если чат пустой
+    if (session.messages.length === 0) {
+      addMessage(
+        'Здравствуйте! Я помогу вам подобрать идеальный букет. Расскажите, для какого повода вы ищете цветы?',
+        'assistant',
+        {
+          quickReplies: [
+            'День рождения',
+            'Романтический подарок',
+            'Извинение',
+            'Благодарность'
+          ]
+        }
+      );
+    }
   };
 
   // Озвучить ответ ассистента (опционально)
@@ -314,7 +339,7 @@ export function ChatInterface() {
               {/* Quick Action Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl w-full">
                 <button
-                  onClick={() => setShowChat(true)}
+                  onClick={handleStartChat}
                   className="p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-left group"
                 >
                   <div className="flex items-start gap-3">
