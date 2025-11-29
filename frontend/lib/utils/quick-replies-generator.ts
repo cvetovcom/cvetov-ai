@@ -4,14 +4,14 @@ import type { SessionParams } from '@/types';
  * Генерирует быстрые ответы на основе текущих собранных параметров
  */
 export function generateQuickReplies(params: SessionParams): string[] {
-  // Этап 1: Собираем повод
-  if (!params.occasion) {
-    return ['День рождения', 'Юбилей', '8 Марта', 'Просто так'];
-  }
-  
-  // Этап 2: Собираем получателя
+  // Этап 1: Собираем получателя
   if (!params.recipient) {
     return ['Маме', 'Девушке', 'Подруге', 'Коллеге'];
+  }
+
+  // Этап 2: Собираем повод
+  if (!params.occasion) {
+    return ['День рождения', 'Юбилей', '8 Марта', 'Просто так'];
   }
   
   // Этап 3: Собираем город

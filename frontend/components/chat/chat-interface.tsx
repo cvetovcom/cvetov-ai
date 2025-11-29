@@ -13,8 +13,8 @@ import { ShoppingCart } from './shopping-cart';
 import { CheckoutModal } from './checkout-modal';
 import { TypingIndicator } from './typing-indicator';
 import { useSpeechRecognition, useSpeechSynthesis } from '@/lib/hooks';
-import { generateQuickReplies, areRequiredParamsCollected } from '@/lib/utils/quick-replies-generator';
 import { sendChatMessage } from '@/lib/services/chat-api.service';
+import { generateQuickReplies } from '@/lib/utils/quick-replies-generator';
 import type { MCPProduct } from '@/types';
 import Image from 'next/image';
 
@@ -43,7 +43,6 @@ export function ChatInterface() {
     isCheckoutOpen,
     addMessage,
     updateParam,
-    switchMode,
     addToCart,
     updateCartQuantity,
     removeFromCart,
@@ -56,6 +55,18 @@ export function ChatInterface() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [session.messages]);
+
+  // Add initial greeting message when chat is opened
+  useEffect(() => {
+    if (showChat && session.messages.length === 0) {
+      const quickReplies = generateQuickReplies(session.params);
+      addMessage(
+        'Привет! 🌸 Я AI-ассистент Цветов.ру. Помогу подобрать идеальный букет. Для кого вы хотите заказать цветы?',
+        'assistant',
+        { quickReplies }
+      );
+    }
+  }, [showChat, session.messages.length, addMessage, session.params]);
 
   // Приветствие в зависимости от времени суток
   const getGreeting = () => {
@@ -77,12 +88,15 @@ export function ChatInterface() {
 
     try {
       // Вызываем Firebase Function для получения ответа
-      const response = await sendChatMessage(session.messages.concat([{
-        id: Date.now().toString(),
-        role: 'user',
-        content,
-        timestamp: new Date(),
-      }]), session.params);
+      const response = await sendChatMessage(
+        session.messages.concat([{
+          id: Date.now().toString(),
+          role: 'user',
+          content,
+          timestamp: new Date(),
+        }]),
+        session.params
+      );
 
       // Обновляем параметры, если были извлечены
       if (response.extractedParams) {
@@ -93,64 +107,11 @@ export function ChatInterface() {
         });
       }
 
-      // Генерируем быстрые ответы на основе текущих параметров
+      // Генерируем быстрые кнопки на основе обновленных параметров
       const updatedParams = { ...session.params, ...response.extractedParams };
       const quickReplies = generateQuickReplies(updatedParams);
 
-      // Проверяем собраны ли все параметры
-      const shouldFetchProducts = areRequiredParamsCollected(updatedParams);
-
-      // Если все параметры собраны - загружаем товары
-      if (shouldFetchProducts && session.mode === 'consultation') {
-        switchMode('search');
-
-        // TODO: Здесь будет вызов MCP API
-        // Пока используем моковые данные
-        const mockProducts: MCPProduct[] = [
-          {
-            id: '1',
-            name: 'Букет "Розовая нежность"',
-            price: { final_price: 2890, original_price: 3200, discount: 10 },
-            main_image: 'https://images.unsplash.com/photo-1694796152188-497671aac01c?w=400',
-            shop_public_uuid: 'shop-1',
-            parent_category_slug: 'bouquets',
-            in_stock: true,
-          },
-          {
-            id: '2',
-            name: 'Тюльпаны весенние',
-            price: { final_price: 1990 },
-            main_image: 'https://images.unsplash.com/photo-1580403072903-36afa4f4c9f6?w=400',
-            shop_public_uuid: 'shop-2',
-            parent_category_slug: 'bouquets',
-            in_stock: true,
-          },
-          {
-            id: '3',
-            name: 'Лилии элегантные',
-            price: { final_price: 3490 },
-            main_image: 'https://images.unsplash.com/photo-1709773628837-94e63fea4769?w=400',
-            shop_public_uuid: 'shop-3',
-            parent_category_slug: 'bouquets',
-            in_stock: true,
-          },
-          {
-            id: '4',
-            name: 'Пионы розовые',
-            price: { final_price: 4290 },
-            main_image: 'https://images.unsplash.com/photo-1656056970279-0cdd04b60434?w=400',
-            shop_public_uuid: 'shop-4',
-            parent_category_slug: 'bouquets',
-            in_stock: true,
-          },
-        ];
-
-        setLoading(false);
-        addMessage(response.message, 'assistant', { products: mockProducts });
-        return;
-      }
-
-      // Добавляем ответ ассистента с быстрыми ответами
+      // Добавляем ответ ассистента с быстрыми кнопками
       setLoading(false);
       addMessage(response.message, 'assistant', { quickReplies });
     } catch (error) {
