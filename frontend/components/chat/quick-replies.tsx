@@ -1,27 +1,24 @@
-import { QuickReply } from '@/types'
-import { Button } from '@/components/ui/button'
+import React from 'react';
 
 interface QuickRepliesProps {
-  replies: QuickReply[]
-  onSelect: (value: string) => void
+  replies: string[];
+  onSelect: (reply: string) => void;
 }
 
 export function QuickReplies({ replies, onSelect }: QuickRepliesProps) {
-  if (replies.length === 0) return null
+  if (!replies || replies.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-2 px-4 py-2 animate-slide-up">
+    <div className="flex flex-wrap gap-2 px-2">
       {replies.map((reply, index) => (
-        <Button
+        <button
           key={index}
-          variant="outline"
-          size="sm"
-          onClick={() => onSelect(reply.value)}
-          className="rounded-full hover:border-primary-300 hover:bg-primary-50"
+          onClick={() => onSelect(reply)}
+          className="px-4 py-2 border border-gray-300 rounded-full text-sm text-gray-700 hover:bg-gray-100 transition-colors"
         >
-          {reply.label}
-        </Button>
+          {reply}
+        </button>
       ))}
     </div>
-  )
+  );
 }

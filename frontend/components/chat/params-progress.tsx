@@ -1,59 +1,65 @@
-import { ChatSession } from '@/types'
-import { Check } from 'lucide-react'
+import React from 'react';
+import { Check } from 'lucide-react';
+import type { SessionParams } from '@/types';
 
 interface ParamsProgressProps {
-  params: ChatSession['params']
+  params: SessionParams;
 }
 
 export function ParamsProgress({ params }: ParamsProgressProps) {
-  const parameters = [
-    { label: 'Кому', value: params.recipient, icon: '👤' },
-    { label: 'Повод', value: params.occasion, icon: '🎁' },
-    { label: 'Город', value: params.city?.name, icon: '📍' },
-  ]
-
-  const hasPrice = params.price !== null
-
   return (
-    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
-      <div className="flex items-center gap-4 max-w-3xl mx-auto">
-        {parameters.map((param, index) => (
-          <div key={param.label} className="flex items-center gap-2">
-            {index > 0 && (
-              <div
-                className={`w-8 h-0.5 ${
-                  param.value ? 'bg-primary-500' : 'bg-gray-200'
-                }`}
-              />
+    <div className="border-b border-gray-200 bg-white">
+      <div className="max-w-3xl mx-auto px-4 py-3">
+        <div className="flex flex-wrap gap-2">
+          {/* Кому */}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
+            params.recipient 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-gray-200 text-gray-500'
+          }`}>
+            {params.recipient ? (
+              <>
+                <Check className="w-4 h-4" />
+                <span>Кому: {params.recipient}</span>
+              </>
+            ) : (
+              <span>Кому: не указано</span>
             )}
-
-            <div
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm ${
-                param.value
-                  ? 'bg-primary-100 text-primary-700'
-                  : 'bg-gray-100 text-gray-500'
-              }`}
-            >
-              <span>{param.icon}</span>
-              <span className="font-medium">
-                {param.value || param.label}
-              </span>
-              {param.value && <Check className="w-3.5 h-3.5 text-primary-500" />}
-            </div>
           </div>
-        ))}
 
-        {hasPrice && (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-0.5 bg-primary-500" />
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm bg-primary-100 text-primary-700">
-              <span>💰</span>
-              <span className="font-medium">{params.price}</span>
-              <Check className="w-3.5 h-3.5 text-primary-500" />
-            </div>
+          {/* Повод */}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
+            params.occasion 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-gray-200 text-gray-500'
+          }`}>
+            {params.occasion ? (
+              <>
+                <Check className="w-4 h-4" />
+                <span>Повод: {params.occasion}</span>
+              </>
+            ) : (
+              <span>Повод: не указано</span>
+            )}
           </div>
-        )}
+
+          {/* Город */}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
+            params.city 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-gray-200 text-gray-500'
+          }`}>
+            {params.city ? (
+              <>
+                <Check className="w-4 h-4" />
+                <span>Город: {params.city.name}</span>
+              </>
+            ) : (
+              <span>Город: не указано</span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
-  )
+  );
 }
