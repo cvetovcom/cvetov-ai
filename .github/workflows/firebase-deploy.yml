@@ -1,0 +1,61 @@
+name: Deploy to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.cvetov.com
+          NEXT_PUBLIC_FIREBASE_API_KEY: AIzaSyBMbSFvoyVinX2U81HI6QqXINW7FWgCtts
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: cvetov-ai.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: cvetov-ai
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: cvetov-ai.firebasestorage.app
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: 846374348944
+          NEXT_PUBLIC_FIREBASE_APP_ID: 1:846374348944:web:2673f57c048bb596981015
+
+      - name: Deploy to Firebase Hosting
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Deploy Firestore rules
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only firestore:rules
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Deploy Firestore indexes
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only firestore:indexes
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

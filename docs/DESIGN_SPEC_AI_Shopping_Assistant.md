@@ -7,6 +7,40 @@
 
 ---
 
+## 0. ДВА РЕЖИМА РАБОТЫ
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      РЕЖИМ КОНСУЛЬТАЦИИ                          │
+│                    (без запросов к API товаров)                  │
+├─────────────────────────────────────────────────────────────────┤
+│  Сбор параметров от клиента:                                    │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
+│  │ 👤 КОМУ     │  │ 🎁 ПОВОД    │  │ 📍 ГОРОД    │             │
+│  │  ✓ Маме    │  │  ✓ ДР       │  │  ○ —        │             │
+│  └─────────────┘  └─────────────┘  └─────────────┘             │
+│                                                                  │
+│  → Progress bar в UI показывает статус параметров               │
+│  → AI задаёт вопросы для сбора недостающих данных               │
+│  → Quick replies для быстрого выбора                            │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ Все 3 параметра заполнены
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      РЕЖИМ ПОИСКА ТОВАРОВ                        │
+│                (запросы к MCP API с городом)                     │
+├─────────────────────────────────────────────────────────────────┤
+│  → mcpClient.searchProducts({ city_slug, preferences, price })  │
+│  → Запросы через mcp.cvetov24.ru (НЕ site.cvetov24.ru!)        │
+│  → Показ карточек товаров                                       │
+│  → Progress bar скрывается                                      │
+│  → Добавление в корзину                                         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 1. DESIGN TOKENS
 
 ### 1.1 Цветовая палитра
@@ -256,11 +290,20 @@ export default config
 
 **Назначение:** Основной интерфейс чата с AI
 
+**Два режима работы:**
+1. **Режим консультации** — сбор параметров (кому, повод, город)
+2. **Режим поиска** — показ товаров после сбора всех параметров
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  HEADER (sticky)                                             │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │ ← 🌸 Цветов.ру AI                          [🛒 2]      ││
+│  └─────────────────────────────────────────────────────────┘│
+│                                                              │
+│  PROGRESS BAR (только в режиме консультации)                │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  ● Кому: Маме    ● Повод: ДР    ○ Город: —             ││
 │  └─────────────────────────────────────────────────────────┘│
 │                                                              │
 │  CHAT AREA (scrollable)                                      │
@@ -311,6 +354,70 @@ export default config
 ```
 
 **Компоненты:**
+
+#### 2.2.0 Progress Bar (Индикатор параметров)
+
+Показывается только в режиме консультации. Отображает собранные параметры.
+
+```tsx
+// components/chat/params-progress.tsx
+interface ParamsProgressProps {
+  recipient: string | null
+  occasion: string | null
+  city: { name: string; slug: string } | null
+}
+
+export function ParamsProgress({ recipient, occasion, city }: ParamsProgressProps) {
+  const params = [
+    { label: 'Кому', value: recipient, icon: '👤' },
+    { label: 'Повод', value: occasion, icon: '🎁' },
+    { label: 'Город', value: city?.name, icon: '📍' },
+  ]
+  
+  return (
+    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
+      <div className="flex items-center gap-4 max-w-3xl mx-auto">
+        {params.map((param, index) => (
+          <div key={param.label} className="flex items-center gap-2">
+            {/* Connector line */}
+            {index > 0 && (
+              <div className={`w-8 h-0.5 ${param.value ? 'bg-primary-500' : 'bg-gray-200'}`} />
+            )}
+            
+            {/* Param indicator */}
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm ${
+              param.value 
+                ? 'bg-primary-100 text-primary-700' 
+                : 'bg-gray-100 text-gray-500'
+            }`}>
+              <span>{param.icon}</span>
+              <span className="font-medium">
+                {param.value || param.label}
+              </span>
+              {param.value && (
+                <Check className="w-3.5 h-3.5 text-primary-500" />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+```
+
+**Стили:**
+```css
+/* Заполненный параметр */
+.param-filled: bg-primary-100 text-primary-700 (красноватый фон)
+
+/* Незаполненный параметр */
+.param-empty: bg-gray-100 text-gray-500
+
+/* Соединительная линия */
+.connector-active: bg-primary-500
+.connector-inactive: bg-gray-200
+```
 
 #### 2.2.1 Chat Header
 ```tsx
@@ -569,7 +676,336 @@ export default config
 
 ---
 
-### 2.5 Empty States
+### 2.5 Sidebar с историей чатов
+
+**Назначение:** Меню с историей чатов и профилем пользователя
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  SIDEBAR (280px на desktop, drawer на mobile)                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  [+] Новый чат                                          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  Сегодня                                                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  💐 Маме — День рождения                    ●          │   │
+│  │     Санкт-Петербург · 2 мин назад                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  Вчера                                                          │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  💐 Жене — Просто так                       ✓          │   │
+│  │     Москва · Заказ оформлен                            │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  Ноябрь                                                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  💐 Коллеге — День рождения                             │   │
+│  │     Казань                                              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                  │
+│  👤 Иван Петров                                                 │
+│     +7 (999) 123-45-67                                          │
+│     [Выйти]                                                     │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Компонент:**
+
+```tsx
+// components/sidebar/chat-sidebar.tsx
+interface ChatSidebarProps {
+  chats: Chat[]
+  currentChatId: string | null
+  user: User | null
+  onNewChat: () => void
+  onSelectChat: (chatId: string) => void
+  onLogout: () => void
+}
+
+export function ChatSidebar({ 
+  chats, 
+  currentChatId, 
+  user, 
+  onNewChat, 
+  onSelectChat,
+  onLogout 
+}: ChatSidebarProps) {
+  const groupedChats = groupChatsByDate(chats)
+  
+  return (
+    <aside className="w-[280px] h-screen bg-gray-50 border-r border-gray-200 flex flex-col">
+      {/* New Chat Button */}
+      <div className="p-3">
+        <button
+          onClick={onNewChat}
+          className="w-full flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          <span className="font-medium">Новый чат</span>
+        </button>
+      </div>
+      
+      {/* Chat List */}
+      <div className="flex-1 overflow-y-auto px-3 space-y-4">
+        {Object.entries(groupedChats).map(([date, dateChats]) => (
+          <div key={date}>
+            <h3 className="text-xs font-medium text-gray-500 uppercase px-2 mb-2">
+              {date}
+            </h3>
+            <div className="space-y-1">
+              {dateChats.map(chat => (
+                <ChatListItem
+                  key={chat.id}
+                  chat={chat}
+                  isActive={chat.id === currentChatId}
+                  onClick={() => onSelectChat(chat.id)}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {/* User Profile */}
+      {user && (
+        <div className="p-3 border-t border-gray-200">
+          <div className="flex items-center gap-3 px-2">
+            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+              <User className="w-5 h-5 text-primary-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm truncate">{user.name}</p>
+              <p className="text-xs text-gray-500">{user.phone}</p>
+            </div>
+            <button
+              onClick={onLogout}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </aside>
+  )
+}
+
+// Chat list item
+function ChatListItem({ chat, isActive, onClick }: {
+  chat: Chat
+  isActive: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
+        isActive 
+          ? 'bg-primary-50 border border-primary-200' 
+          : 'hover:bg-gray-100'
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <span className="text-lg">💐</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className={`text-sm truncate ${isActive ? 'font-medium' : ''}`}>
+              {chat.title}
+            </p>
+            {chat.hasOrder && (
+              <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+            )}
+          </div>
+          <p className="text-xs text-gray-500 truncate">
+            {chat.params.city?.name || 'Город не выбран'}
+            {' · '}
+            {formatRelativeTime(chat.updatedAt)}
+          </p>
+        </div>
+      </div>
+    </button>
+  )
+}
+```
+
+---
+
+### 2.6 Модальное окно авторизации
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                           ✕     │
+│                                                                  │
+│                          🌸                                      │
+│                                                                  │
+│                  Войдите в аккаунт                              │
+│           Чтобы сохранить историю чатов                         │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  +7 (___) ___-__-__                                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Пароль                                                 │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                      Войти                              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│              Ещё нет аккаунта? Регистрация                      │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Компонент:**
+
+```tsx
+// components/auth/login-modal.tsx
+interface LoginModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSuccess: (user: User) => void
+}
+
+export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
+  const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, password }),
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        setAuthToken(data.token, data.user)
+        onSuccess(data.user)
+        onClose()
+      } else {
+        setError(data.error || 'Ошибка входа')
+      }
+    } catch (err) {
+      setError('Не удалось подключиться к серверу')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <div className="text-center mb-6">
+          <span className="text-4xl">🌸</span>
+          <h2 className="text-xl font-semibold mt-4">Войдите в аккаунт</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Чтобы сохранить историю чатов
+          </p>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+              {error}
+            </div>
+          )}
+          
+          <div>
+            <input
+              type="tel"
+              placeholder="+7 (___) ___-__-__"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+          
+          <div>
+            <input
+              type="password"
+              placeholder="Пароль"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+          
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-3 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-xl transition-colors disabled:opacity-50"
+          >
+            {isLoading ? 'Вход...' : 'Войти'}
+          </button>
+        </form>
+        
+        <p className="text-center text-sm text-gray-500 mt-4">
+          Ещё нет аккаунта?{' '}
+          <a href="https://cvetov.com/register" className="text-primary-500 hover:underline">
+            Регистрация
+          </a>
+        </p>
+      </DialogContent>
+    </Dialog>
+  )
+}
+```
+
+---
+
+### 2.7 Prompt для входа (в чате)
+
+Показывается когда гость пытается оформить заказ или хочет сохранить историю.
+
+```tsx
+// components/chat/login-prompt.tsx
+export function LoginPrompt({ onLogin }: { onLogin: () => void }) {
+  return (
+    <div className="mx-4 my-4 p-4 bg-primary-50 border border-primary-100 rounded-xl">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+          <User className="w-5 h-5 text-primary-600" />
+        </div>
+        <div className="flex-1">
+          <h4 className="font-medium text-gray-900">
+            Войдите, чтобы сохранить историю
+          </h4>
+          <p className="text-sm text-gray-600 mt-1">
+            Ваши чаты и предпочтения будут сохранены для следующих заказов
+          </p>
+          <button
+            onClick={onLogin}
+            className="mt-3 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Войти
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### 2.8 Empty States
 
 #### Пустая корзина
 ```tsx
@@ -836,19 +1272,45 @@ Input: sticky bottom-0 bg-white border-t p-4
 
 ## 9. ПРИМЕРЫ ПРОМПТОВ ДЛЯ v0.dev
 
-### Chat Interface
+### Chat Interface с Progress Bar
 ```
 Create a ChatGPT-style chat interface for a flower delivery AI assistant.
 
+Features:
 - Red accent color (#DD0B20) - brand color
 - White background, clean minimal design
+- Progress bar at top showing 3 collection steps:
+  - "👤 Кому" (recipient)
+  - "🎁 Повод" (occasion)
+  - "📍 Город" (city)
+  - Each step shows: empty (gray), filled (red with checkmark)
 - AI messages: left-aligned with robot avatar, white bubble with border
 - User messages: right-aligned, gray bubble
+- Quick reply buttons for common answers
 - Typing indicator with bouncing dots
 - Sticky input bar at bottom with send button
-- Product cards grid (2 columns) with image, name, price, rating, add to cart button
 
 Use shadcn/ui, Tailwind CSS, Lucide icons.
+```
+
+### Progress Bar Component
+```
+Create a horizontal progress indicator for a 3-step consultation flow.
+
+Steps:
+1. "👤 Кому" - who is the gift for
+2. "🎁 Повод" - occasion
+3. "📍 Город" - delivery city
+
+Visual:
+- Horizontal layout with connecting lines
+- Each step is a pill/chip
+- Empty: gray background, gray text
+- Filled: red (#DD0B20) tinted background, red text, checkmark icon
+- Steps connected by lines (gray if next step empty, red if filled)
+- Compact height (~40px)
+
+Use Tailwind CSS, Lucide React for check icon.
 ```
 
 ### Product Card
@@ -886,6 +1348,79 @@ Requirements:
 - Empty state with illustration
 
 Use shadcn/ui Sheet component and Tailwind CSS.
+```
+
+### Quick Reply Buttons
+```
+Create quick reply button chips for a chat interface.
+
+Requirements:
+- Horizontal scrollable row
+- Pill-shaped buttons
+- White background with gray border
+- On hover: red border (#DD0B20), light red background
+- Text: "День рождения", "Маме", "до 3000₽", etc.
+- Compact size (32px height)
+- Gap between buttons: 8px
+
+Use Tailwind CSS.
+```
+
+### Chat Sidebar with History
+```
+Create a sidebar for chat history in a ChatGPT-style interface.
+
+Requirements:
+- Width: 280px
+- Gray background (#f4f4f5)
+- "New Chat" button at top with plus icon
+- Chat list grouped by date: "Today", "Yesterday", "November"
+- Each chat item shows:
+  - 💐 emoji
+  - Title like "Маме — День рождения"
+  - City and relative time below
+  - Checkmark if order was made
+- Active chat: red tinted background with border
+- User profile at bottom: avatar, name, phone, logout button
+- Red accent color (#DD0B20)
+
+Use Tailwind CSS, Lucide icons.
+```
+
+### Login Modal
+```
+Create a login modal for a flower delivery service.
+
+Requirements:
+- Centered modal with backdrop
+- Logo/icon at top (🌸)
+- Title: "Войдите в аккаунт"
+- Subtitle: "Чтобы сохранить историю чатов"
+- Phone input with mask +7 (___) ___-__-__
+- Password input
+- Red login button (#DD0B20)
+- Link to registration at bottom
+- Close button (X) in corner
+- Error message area
+
+Use shadcn/ui Dialog, Tailwind CSS.
+```
+
+### Login Prompt Banner
+```
+Create an inline banner prompting user to login.
+
+Requirements:
+- Appears inside chat area
+- Light red background (#fef2f2)
+- Red border (#fee2e2)
+- User icon in circle on left
+- Title: "Войдите, чтобы сохранить историю"
+- Subtitle explaining benefits
+- Small red "Войти" button
+- Rounded corners (12px)
+
+Use Tailwind CSS, Lucide icons.
 ```
 
 ---
