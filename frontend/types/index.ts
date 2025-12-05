@@ -14,7 +14,7 @@ export interface Message {
 }
 
 export interface MCPProduct {
-  id: string
+  guid: string
   name: string
   price: {
     final_price: number
@@ -25,9 +25,11 @@ export interface MCPProduct {
   images?: string[]
   parent_category_slug: string
   shop_public_uuid: string
+  shop_name?: string
   description?: string
   rating?: number
   in_stock?: boolean
+  slug?: string
 }
 
 export interface ChatSession {
@@ -42,6 +44,10 @@ export interface ChatSession {
       name: string
       slug: string
     } | null
+    delivery_address?: string | null
+    delivery_date?: string | null
+    delivery_time?: string | null
+    address_question_shown?: boolean
   }
   messages: Message[]
   createdAt: Date
@@ -72,6 +78,7 @@ export interface OrderData {
   }>
   total: number
   payment_method?: 'card' | 'cash'
+  delivery_date?: string
   delivery_time?: string
 }
 

@@ -1,10 +1,12 @@
-import type { Message, SessionParams } from '@/types';
+import type { Message, SessionParams, MCPProduct } from '@/types';
 
 const FIREBASE_FUNCTION_URL = 'https://europe-west1-cvetov-ai.cloudfunctions.net/chat';
 
 export interface ChatResponse {
   message: string;
   extractedParams?: Partial<SessionParams>;
+  products?: MCPProduct[];
+  quickReplies?: string[];
 }
 
 export async function sendChatMessage(

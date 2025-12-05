@@ -33,6 +33,17 @@ export function ChatInput({
     }
   };
 
+  const triggerHaptic = () => {
+    if ('vibrate' in navigator) {
+      navigator.vibrate(50); // 50ms вибрация
+    }
+  };
+
+  const handleVoiceInput = () => {
+    triggerHaptic();
+    onVoiceInput?.();
+  };
+
   return (
     <div className="border-t border-gray-200 bg-white">
       <div className="max-w-3xl mx-auto px-4 py-4">
@@ -45,23 +56,47 @@ export function ChatInput({
                 onKeyPress={handleKeyPress}
                 placeholder="Сообщение AI ассистенту..."
                 disabled={disabled}
-                className="pr-10 py-3 border-gray-300 rounded-3xl focus:ring-2 focus:ring-gray-300 focus:border-transparent resize-none"
+                className="py-3 border-gray-300 rounded-3xl focus:ring-2 focus:ring-gray-300 focus:border-transparent resize-none"
               />
-              {onVoiceInput && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`absolute right-2 bottom-2 h-8 w-8 p-0 ${
-                    isListening ? 'text-red-500 hover:bg-red-50' : 'text-gray-500 hover:bg-gray-100'
-                  }`}
-                  onClick={onVoiceInput}
-                >
-                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                </Button>
-              )}
             </div>
-            <Button 
-              onClick={handleSend} 
+
+            {onVoiceInput && (
+              <button
+                onClick={handleVoiceInput}
+                disabled={disabled}
+                className={`
+                  relative h-12 w-12 rounded-full shrink-0
+                  flex items-center justify-center
+                  transition-all duration-200
+                  ${isListening
+                    ? 'bg-red-500 hover:bg-red-600 scale-105'
+                    : 'bg-gray-800 hover:bg-gray-700'
+                  }
+                  disabled:bg-gray-200 disabled:cursor-not-allowed
+                `}
+              >
+                {/* Иконка микрофона */}
+                {isListening ? (
+                  <MicOff className="h-5 w-5 text-white relative z-10" />
+                ) : (
+                  <Mic className="h-5 w-5 text-white relative z-10" />
+                )}
+
+                {/* Визуализация аудио-волн */}
+                {isListening && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div
+                      className="absolute w-full h-full rounded-full border-4 border-red-300 animate-ping"
+                      style={{ animationDuration: '1.5s' }}
+                    />
+                    <div className="absolute w-full h-full rounded-full border-2 border-red-400 animate-pulse" />
+                  </div>
+                )}
+              </button>
+            )}
+
+            <Button
+              onClick={handleSend}
               disabled={!inputText.trim() || disabled}
               className="h-12 w-12 rounded-full bg-gray-800 hover:bg-gray-700 disabled:bg-gray-200 disabled:text-gray-400 p-0 shrink-0"
             >

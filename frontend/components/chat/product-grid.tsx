@@ -8,7 +8,7 @@ interface ProductGridProps {
   initialVisible?: number;
 }
 
-export function ProductGrid({ products, onSelectProduct, initialVisible = 4 }: ProductGridProps) {
+export function ProductGrid({ products, onSelectProduct, initialVisible = 8 }: ProductGridProps) {
   const [visibleCount, setVisibleCount] = useState(initialVisible);
 
   const handleShowMore = () => {
@@ -21,9 +21,9 @@ export function ProductGrid({ products, onSelectProduct, initialVisible = 4 }: P
   return (
     <div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {visibleProducts.map((product) => (
+        {visibleProducts.map((product, index) => (
           <ProductCard
-            key={product.id}
+            key={product.guid || `product-${index}`}
             product={product}
             onSelect={onSelectProduct}
           />

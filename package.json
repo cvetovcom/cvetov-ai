@@ -1,0 +1,10 @@
+{
+  "name": "cvetov-ai",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy:functions": "cd functions && npm run build && cd .. && firebase deploy --only functions --token \"$FIREBASE_TOKEN\"",
+    "deploy:hosting": "cd frontend && npm run build && cd .. && firebase deploy --only hosting --token \"$FIREBASE_TOKEN\"",
+    "deploy:all": "cd functions && npm run build && cd ../frontend && npm run build && cd .. && firebase deploy --token \"$FIREBASE_TOKEN\""
+  }
+}

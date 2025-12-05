@@ -107,13 +107,18 @@ export function ChatInterface() {
         });
       }
 
-      // Генерируем быстрые кнопки на основе обновленных параметров
+      // Используем быстрые кнопки из ответа API (если есть)
+      // Если кнопок нет - генерируем на основе параметров (fallback)
       const updatedParams = { ...session.params, ...response.extractedParams };
-      const quickReplies = generateQuickReplies(updatedParams);
+      const quickReplies = response.quickReplies || generateQuickReplies(updatedParams);
 
-      // Добавляем ответ ассистента с быстрыми кнопками
+      // Добавляем ответ ассистента
+      // Если есть товары - не показываем быстрые кнопки
       setLoading(false);
-      addMessage(response.message, 'assistant', { quickReplies });
+      addMessage(response.message, 'assistant', {
+        quickReplies: response.products && response.products.length > 0 ? undefined : quickReplies,
+        products: response.products
+      });
     } catch (error) {
       console.error('Error sending message:', error);
       setLoading(false);
@@ -130,7 +135,7 @@ export function ChatInterface() {
   const handleSelectProduct = (product: MCPProduct) => {
     addToCart(product);
     addMessage('Товар добавлен в корзину! Хотите продолжить выбор?', 'assistant', {
-      quickReplies: ['Показать ещё', 'Перейти к оформлению', 'Изменить параметры'],
+      quickReplies: ['Показать ещё', 'Изменить параметры'],
     });
   };
 
@@ -391,6 +396,7 @@ export function ChatInterface() {
       {isCheckoutOpen && (
         <CheckoutModal
           cart={cart}
+          sessionParams={session.params}
           onClose={() => setCheckoutOpen(false)}
           onSubmit={handleSubmitOrder}
           getTotalPrice={getTotalPrice}
