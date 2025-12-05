@@ -62,7 +62,7 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
         )}
 
         {/* Discount Badge */}
-        {product.price.discount && product.price.discount > 0 && (
+        {product.price.discount > 0 && (
           <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
             -{product.price.discount}%
           </div>
@@ -72,10 +72,10 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
       {/* Product Info */}
       <div className="p-3">
         <h3 className="text-sm mb-1 truncate">{product.name}</h3>
-        <p className="text-xs text-gray-500 mb-2 truncate">{product.shop_public_uuid}</p>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-gray-800">{product.price.final_price.toLocaleString()} ₽</span>
+        <p className="text-xs text-gray-500 mb-2 truncate">{product.shop_name || product.shop_public_uuid}</p>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="text-sm font-medium text-gray-800">{product.price.final_price.toLocaleString()} ₽</span>
             {product.price.original_price && product.price.original_price > product.price.final_price && (
               <span className="text-xs text-gray-400 line-through">
                 {product.price.original_price.toLocaleString()} ₽
@@ -85,9 +85,9 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
           <Button
             onClick={() => onSelect(product)}
             size="sm"
-            className="bg-gray-800 hover:bg-gray-700 text-white h-8 px-3"
+            className="bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 flex-shrink-0"
           >
-            Выбрать
+            Купить
           </Button>
         </div>
       </div>
