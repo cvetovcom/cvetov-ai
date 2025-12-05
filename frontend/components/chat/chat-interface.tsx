@@ -269,7 +269,7 @@ export function ChatInterface() {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           {!showChat ? (
             /* Welcome Screen */
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
