@@ -269,7 +269,7 @@ export function ChatInterface() {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 overflow-hidden">
           {!showChat ? (
             /* Welcome Screen */
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -326,7 +326,7 @@ export function ChatInterface() {
             </div>
           ) : (
             /* Chat Screen */
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col flex-1 min-h-0">
               {/* Parameters Progress */}
               {showChat && <ParamsProgress params={session.params} />}
 
