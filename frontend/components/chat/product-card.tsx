@@ -62,7 +62,7 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
         )}
 
         {/* Discount Badge */}
-        {product.price.discount > 0 && (
+        {product.price.discount && product.price.discount > 0 && (
           <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
             -{product.price.discount}%
           </div>

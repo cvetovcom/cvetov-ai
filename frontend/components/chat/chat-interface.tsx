@@ -141,7 +141,7 @@ export function ChatInterface() {
 
   // Обработка обновления количества в корзине
   const handleUpdateQuantity = (productId: string, delta: number) => {
-    const item = cart.find((i) => i.id === productId);
+    const item = cart.find((i) => i.guid === productId);
     if (item) {
       updateCartQuantity(productId, item.quantity + delta);
     }
