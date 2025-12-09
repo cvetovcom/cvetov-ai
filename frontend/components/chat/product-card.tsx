@@ -17,6 +17,20 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
   );
   const [isLoadingImages, setIsLoadingImages] = useState(false);
 
+  // Feature flag для прямых ссылок на cvetov.com
+  const enableDirectLinks = process.env.NEXT_PUBLIC_ENABLE_DIRECT_LINKS === 'true';
+
+  // Генерация URL товара на cvetov.com
+  const getProductUrl = (): string => {
+    // Используем parent_category_slug и slug из MCPProduct
+    if (product.slug && product.parent_category_slug) {
+      return `https://cvetov.com/product/${product.parent_category_slug}/${product.slug}/`;
+    }
+
+    // Fallback если slug отсутствует
+    return product.detailUrl || 'https://cvetov.com';
+  };
+
   // Форматирование цены без копеек
   const formatPrice = (price: number) => {
     return Math.floor(price).toLocaleString('ru-RU');
@@ -117,13 +131,29 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
               </span>
             )}
           </div>
-          <Button
-            onClick={() => onSelect(product)}
-            size="sm"
-            className="bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 flex-shrink-0"
-          >
-            Купить
-          </Button>
+          {enableDirectLinks ? (
+            <Button
+              asChild
+              size="sm"
+              className="bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 flex-shrink-0"
+            >
+              <a
+                href={getProductUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Купить
+              </a>
+            </Button>
+          ) : (
+            <Button
+              onClick={() => onSelect(product)}
+              size="sm"
+              className="bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 flex-shrink-0"
+            >
+              Купить
+            </Button>
+          )}
         </div>
       </div>
     </div>

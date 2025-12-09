@@ -23,6 +23,9 @@ export function ChatInterface() {
   const [showChat, setShowChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Feature flag для прямых ссылок на cvetov.com
+  const enableDirectLinks = process.env.NEXT_PUBLIC_ENABLE_DIRECT_LINKS === 'true';
+
   // Speech Recognition & Synthesis
   const { isListening, toggleListening } = useSpeechRecognition({
     onResult: (transcript) => {
@@ -371,7 +374,7 @@ export function ChatInterface() {
         </div>
 
         {/* Shopping Cart */}
-        {showChat && (
+        {showChat && !enableDirectLinks && (
           <ShoppingCart
             cart={cart}
             onUpdateQuantity={handleUpdateQuantity}
@@ -397,7 +400,7 @@ export function ChatInterface() {
       </div>
 
       {/* Checkout Modal */}
-      {isCheckoutOpen && (
+      {isCheckoutOpen && !enableDirectLinks && (
         <CheckoutModal
           cart={cart}
           sessionParams={session.params}
