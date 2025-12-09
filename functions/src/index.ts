@@ -492,25 +492,46 @@ async function searchProducts(params: {
     }
   }
 
-  // 2. Получаем товары с фильтрацией по координатам
-  const url = new URL('https://mcp.cvetov24.ru/api/v2/catalog_items')
-  url.searchParams.append('lat', coordinates.lat.toString())
-  url.searchParams.append('lon', coordinates.lon.toString())
-  url.searchParams.append('page', '0')
-  url.searchParams.append('page_size', '20')
+  // 2. Получаем ВСЕ товары с фильтрацией по координатам (постранично)
+  let products: any[] = []
+  let page = 0
+  const pageSize = 100
+  let hasMore = true
 
-  console.log('Fetching products with coordinates:', url.toString())
+  console.log('Fetching ALL products with coordinates:', coordinates)
 
-  const response = await fetch(url.toString())
+  while (hasMore) {
+    const url = new URL('https://mcp.cvetov24.ru/api/v2/catalog_items')
+    url.searchParams.append('lat', coordinates.lat.toString())
+    url.searchParams.append('lon', coordinates.lon.toString())
+    url.searchParams.append('page', page.toString())
+    url.searchParams.append('page_size', pageSize.toString())
 
-  if (!response.ok) {
-    throw new Error(`MCP API error: ${response.status}`)
+    const response = await fetch(url.toString())
+
+    if (!response.ok) {
+      throw new Error(`MCP API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    const pageProducts = data.catalog_items || []
+
+    if (pageProducts.length === 0) {
+      hasMore = false
+    } else {
+      products.push(...pageProducts)
+      console.log(`Fetched page ${page}: ${pageProducts.length} products (total: ${products.length})`)
+
+      // Если получили меньше чем page_size, значит это последняя страница
+      if (pageProducts.length < pageSize) {
+        hasMore = false
+      } else {
+        page++
+      }
+    }
   }
 
-  const data = await response.json()
-  let products = data.catalog_items || []
-
-  console.log(`Fetched ${products.length} products for coordinates`)
+  console.log(`Fetched total ${products.length} products from ${page + 1} pages`)
 
   // Добавляем поле images с оригинальным main_image (фронтенд сам уменьшит до 640x640)
   products = products.map((product: any) => ({
@@ -714,14 +735,25 @@ JSON ответ:`
       }
     }
 
-    // Парсим JSON из ответа
-    const jsonMatch = responseText.match(/\{[\s\S]*?\}/)
+    console.log('Claude API response:', responseText)
+
+    // Парсим JSON из ответа - используем ЖАДНЫЙ квантификатор для вложенных объектов
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      console.warn('Claude response parsing failed:', responseText)
+      console.warn('Claude response parsing failed - no JSON found:', responseText)
       return { liked: [], disliked: [] }
     }
 
-    const parsed = JSON.parse(jsonMatch[0])
+    console.log('Extracted JSON string:', jsonMatch[0])
+
+    let parsed
+    try {
+      parsed = JSON.parse(jsonMatch[0])
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError)
+      console.error('Failed JSON string:', jsonMatch[0])
+      return { liked: [], disliked: [] }
+    }
 
     // Валидация с поддержкой обратной совместимости
     const validateFlowerPreference = (item: any): FlowerPreference | null => {
