@@ -178,7 +178,7 @@ export function ChatInterface() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-900">
+    <div className="flex bg-gray-900" style={{ height: '100dvh' }}>
       {/* Sidebar - Desktop */}
       <div className="hidden lg:flex flex-col w-64 bg-gray-900 border-r border-gray-700">
         <div className="p-4 border-b border-gray-700">
@@ -268,8 +268,8 @@ export function ChatInterface() {
           )}
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-hidden">
+        {/* Content Area - Reserve space for ChatInput at bottom */}
+        <div className="flex-1 overflow-hidden" style={{ maxHeight: 'calc(100dvh - 56px - 88px)' }}>
           {!showChat ? (
             /* Welcome Screen */
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -326,7 +326,7 @@ export function ChatInterface() {
             </div>
           ) : (
             /* Chat Screen */
-            <div className="flex flex-col flex-1 min-h-0">
+            <div className="flex flex-col h-full">
               {/* Parameters Progress */}
               {showChat && <ParamsProgress params={session.params} />}
 
@@ -346,6 +346,7 @@ export function ChatInterface() {
                         <ProductGrid
                           products={message.products}
                           onSelectProduct={handleSelectProduct}
+                          citySlug={session.params.city?.slug}
                         />
                       )}
 
@@ -380,16 +381,19 @@ export function ChatInterface() {
           />
         )}
 
-        {/* Chat Input - Always at bottom when chat is active */}
-        {showChat && (
-          <ChatInput
-            onSend={handleSendMessage}
-            disabled={isLoading}
-            isListening={isListening}
-            isSpeaking={isSpeaking}
-            onVoiceInput={handleVoiceInput}
-          />
-        )}
+        {/* Chat Input - Always at bottom */}
+        <ChatInput
+          onSend={(message) => {
+            if (!showChat) {
+              setShowChat(true);
+            }
+            handleSendMessage(message);
+          }}
+          disabled={isLoading}
+          isListening={isListening}
+          isSpeaking={isSpeaking}
+          onVoiceInput={handleVoiceInput}
+        />
       </div>
 
       {/* Checkout Modal */}

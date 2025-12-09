@@ -40,6 +40,11 @@ interface ChatRequest {
   params: ChatParams
 }
 
+interface FlowerPreference {
+  flower: string
+  color?: string
+}
+
 // System prompt для режима консультации
 function getConsultationPrompt(params: ChatParams): string {
   return `Ты - дружелюбный AI-ассистент Цветов.ру. Твоя задача помочь клиенту подобрать цветы.
@@ -364,6 +369,29 @@ function extractParams(message: string): Partial<ChatParams> {
     console.log('Extracted delivery date:', deliveryDate)
   }
 
+  // 6. Извлечение preferences (предпочтений по цветам)
+  // Список популярных цветов для распознавания
+  const flowers = [
+    'роз', 'тюльпан', 'пион', 'хризантем', 'гвоздик', 'лили', 'орхиде',
+    'ромашк', 'гербер', 'альстромери', 'ири', 'фрези', 'гиацинт',
+    'нарцисс', 'подсолнух', 'эустом', 'гортензи', 'каллы'
+  ]
+
+  // Проверяем, упоминаются ли цветы в сообщении
+  let hasFlowerMention = false
+  for (const flower of flowers) {
+    if (normalizedMessage.includes(flower)) {
+      hasFlowerMention = true
+      break
+    }
+  }
+
+  // Если упоминаются цветы, сохраняем всё сообщение как preferences
+  if (hasFlowerMention) {
+    result.preferences = message
+    console.log('Extracted preferences:', message)
+  }
+
   return result
 }
 
@@ -469,7 +497,7 @@ async function searchProducts(params: {
   url.searchParams.append('lat', coordinates.lat.toString())
   url.searchParams.append('lon', coordinates.lon.toString())
   url.searchParams.append('page', '0')
-  url.searchParams.append('page_size', '50')
+  url.searchParams.append('page_size', '20')
 
   console.log('Fetching products with coordinates:', url.toString())
 
@@ -484,7 +512,29 @@ async function searchProducts(params: {
 
   console.log(`Fetched ${products.length} products for coordinates`)
 
-  // 3. Получаем магазины в зоне доставки для добавления названий
+  // Добавляем поле images с оригинальным main_image (фронтенд сам уменьшит до 640x640)
+  products = products.map((product: any) => ({
+    ...product,
+    images: product.main_image ? [product.main_image] : [],
+    detailUrl: `https://mcp.cvetov24.ru/api/v2/catalog_items/${product.guid}`
+  }))
+
+  // 3. ФИЛЬТРАЦИЯ: Только категория "Цветы" (flowers)
+  console.log(`Sample product parent_category_slug:`, products[0]?.parent_category_slug)
+
+  // Фильтруем только товары с parent_category_slug === 'flowers'
+  const beforeFilterCount = products.length
+  products = products.filter((product: any) => {
+    return product.parent_category_slug === 'flowers'
+  })
+
+  console.log(`After "flowers" filter: ${products.length} products (was ${beforeFilterCount})`)
+
+  if (products.length === 0) {
+    console.warn('⚠️ No products found in "flowers" category')
+  }
+
+  // 4. Получаем магазины в зоне доставки для добавления названий
   const shopsUrl = new URL('https://mcp.cvetov24.ru/api/v1/shops/get_delivery_shops')
   shopsUrl.searchParams.append('lat', coordinates.lat.toString())
   shopsUrl.searchParams.append('lon', coordinates.lon.toString())
@@ -524,8 +574,48 @@ async function searchProducts(params: {
     console.log(`After max_price filter: ${products.length} products`)
   }
 
-  // 5. Возвращаем до 12 товаров
-  return products.slice(0, 12)
+  // 5. НОВАЯ ФИЛЬТРАЦИЯ: По preferences (состав букета)
+  if (params.preferences && params.preferences.trim().length > 0) {
+    console.log('Filtering by preferences:', params.preferences)
+
+    // Парсим preferences
+    const parsedPreferences = await parsePreferences(params.preferences)
+    console.log('Parsed preferences:', parsedPreferences)
+
+    // Если есть хоть какие-то предпочтения
+    if (parsedPreferences.liked.length > 0 || parsedPreferences.disliked.length > 0) {
+      // Загружаем composition для всех товаров параллельно
+      const guids = products.map((p: any) => p.guid)
+      const compositions = await loadCompositions(guids)
+
+      console.log(`Loaded ${compositions.size} compositions out of ${guids.length} products`)
+
+      // Фильтруем по preferences
+      products = products.filter((product: any) => {
+        const composition = compositions.get(product.guid)
+        return matchesPreferences(composition, parsedPreferences)
+      })
+
+      console.log(`After preferences filter: ${products.length} products`)
+    }
+  }
+
+  // 6. Возвращаем до 16 товаров
+  const finalProducts = products.slice(0, 16)
+
+  // Логируем первый товар для проверки
+  if (finalProducts.length > 0) {
+    console.log('First product sample:', JSON.stringify({
+      guid: finalProducts[0].guid,
+      name: finalProducts[0].name,
+      images: finalProducts[0].images,
+      main_image: finalProducts[0].main_image,
+      hasImages: !!finalProducts[0].images,
+      imagesLength: finalProducts[0].images?.length
+    }))
+  }
+
+  return finalProducts
 }
 
 // Извлечение минимальной цены из строки
@@ -556,6 +646,245 @@ function extractMaxPrice(priceStr: string): number | undefined {
   if (rangeMatch) return parseInt(rangeMatch[2])
 
   return undefined
+}
+
+// Функция парсинга preferences (предпочтений по цветам) с помощью Claude API
+async function parsePreferences(preferences: string): Promise<{
+  liked: FlowerPreference[]
+  disliked: FlowerPreference[]
+}> {
+  try {
+    const prompt = `Ты - специалист по извлечению предпочтений клиентов цветочного магазина.
+
+Задача: Из текста пользователя извлечь:
+1. Названия ЦВЕТОВ (розы, тюльпаны, лилии)
+2. ЦВЕТА цветов (белая, красная, персиковая) - ТОЛЬКО если явно упомянуты!
+
+ВАЖНО: Цвет НЕ обязателен!
+- "Розы" = любит розы, цвет не важен (показать ВСЕ розы)
+- "Белые розы" = любит розы, ИМЕННО белые
+
+Известные цветы: розы, тюльпаны, пионы, хризантемы, гвоздики, лилии, орхидеи, ромашки, герберы, альстромерии, ирисы, фрезии, гиацинты, нарциссы, подсолнухи, эустомы, гортензии, каллы
+
+Известные цвета: белая, красная, розовая, персиковая, желтая, оранжевая, голубая, сиреневая, бордовая, пурпурная, бежевая, кремовая, лиловая
+
+ПРИМЕРЫ:
+
+Текст: "люблю розы"
+Ответ: {"liked": [{"flower": "роза"}], "disliked": []}
+
+Текст: "белые розы"
+Ответ: {"liked": [{"flower": "роза", "color": "белая"}], "disliked": []}
+
+Текст: "красные и белые розы"
+Ответ: {"liked": [{"flower": "роза", "color": "красная"}, {"flower": "роза", "color": "белая"}], "disliked": []}
+
+Текст: "розы, но без гвоздик"
+Ответ: {"liked": [{"flower": "роза"}], "disliked": [{"flower": "гвоздика"}]}
+
+Текст: "без красных гвоздик, белые розы"
+Ответ: {"liked": [{"flower": "роза", "color": "белая"}], "disliked": [{"flower": "гвоздика", "color": "красная"}]}
+
+Текст: "просто красивый букет"
+Ответ: {"liked": [], "disliked": []}
+
+ВАЖНО:
+- Возвращай ТОЛЬКО JSON без комментариев
+- Используй базовые формы (роза, лилия, тюльпан)
+- Если цвет НЕ упомянут = НЕ добавляй поле "color"
+- Вопросы о цветах = liked (хочет узнать = интересуется)
+- Отрицания (без, не люблю, исключить) = disliked
+
+Текст пользователя: "${preferences}"
+
+JSON ответ:`
+
+    const message = await anthropic.messages.create({
+      model: 'claude-3-5-haiku-20241022',
+      max_tokens: 200,
+      messages: [{ role: 'user', content: prompt }]
+    })
+
+    // Извлекаем текст из ответа
+    let responseText = ''
+    for (const block of message.content) {
+      if (block.type === 'text') {
+        responseText = block.text
+        break
+      }
+    }
+
+    // Парсим JSON из ответа
+    const jsonMatch = responseText.match(/\{[\s\S]*?\}/)
+    if (!jsonMatch) {
+      console.warn('Claude response parsing failed:', responseText)
+      return { liked: [], disliked: [] }
+    }
+
+    const parsed = JSON.parse(jsonMatch[0])
+
+    // Валидация с поддержкой обратной совместимости
+    const validateFlowerPreference = (item: any): FlowerPreference | null => {
+      if (typeof item === 'string') {
+        // Обратная совместимость: старый формат ["розы"]
+        return { flower: item }
+      }
+      if (item && typeof item.flower === 'string') {
+        return {
+          flower: item.flower,
+          color: item.color || undefined
+        }
+      }
+      return null
+    }
+
+    return {
+      liked: Array.isArray(parsed.liked)
+        ? parsed.liked.map(validateFlowerPreference).filter(Boolean) as FlowerPreference[]
+        : [],
+      disliked: Array.isArray(parsed.disliked)
+        ? parsed.disliked.map(validateFlowerPreference).filter(Boolean) as FlowerPreference[]
+        : []
+    }
+  } catch (error) {
+    console.error('Error in parsePreferences with Claude:', error)
+    // Graceful fallback - возвращаем пустой результат
+    return { liked: [], disliked: [] }
+  }
+}
+
+// Helper: извлечь название цветка из "роза белая"
+function extractFlowerName(text: string): string {
+  const match = text.match(/^(\S+)/)
+  return match ? match[1] : ''
+}
+
+// Helper: извлечь цвет из "роза белая"
+function extractFlowerColor(text: string): string {
+  const parts = text.split(/\s+/)
+  return parts.length > 1 ? parts.slice(1).join(' ') : ''
+}
+
+// Helper: нормализация цветка
+function normalizeFlower(word: string): string {
+  return word
+    .replace(/ы$/, '')   // розы → роз
+    .replace(/и$/, '')   // лилии → лили
+    .replace(/а$/, '')   // роза → роз
+    .replace(/я$/, '')   // гортензия → гортензи
+}
+
+// Helper: нормализация цвета
+function normalizeColor(word: string): string {
+  return word
+    .replace(/ё/g, 'е')  // ё → е
+    .replace(/ый$/, '')  // красный → красн
+    .replace(/ая$/, '')  // белая → бел
+    .replace(/ой$/, '')  // голубой → голуб
+    .replace(/ий$/, '')  // сиреневый → сирене
+    .toLowerCase()
+}
+
+// Функция проверки товара по preferences
+function matchesPreferences(
+  composition: any[] | null | undefined,
+  preferences: { liked: FlowerPreference[], disliked: FlowerPreference[] }
+): boolean {
+  if (!composition || composition.length === 0) {
+    return false
+  }
+
+  // Парсим composition в структурированный формат
+  const compositionItems = composition
+    .map(item => {
+      const name = (item.composition_item?.name || '').toLowerCase()
+      return {
+        flower: extractFlowerName(name),
+        color: extractFlowerColor(name),
+        fullName: name
+      }
+    })
+    .filter(item => item.flower.length > 0)
+
+  console.log('Composition items:', compositionItems)
+  console.log('Checking preferences:', preferences)
+
+  // ПРАВИЛО 1: Проверка НЕЖЕЛАЕМЫХ (жесткое правило)
+  for (const disliked of preferences.disliked) {
+    const hasDisliked = compositionItems.some(item => {
+      // Проверяем совпадение по названию цветка
+      const flowerMatches = normalizeFlower(item.flower).includes(normalizeFlower(disliked.flower))
+
+      if (!flowerMatches) return false
+
+      // Если цвет НЕ указан в disliked → исключить весь цветок
+      if (!disliked.color) {
+        return true
+      }
+
+      // Если цвет указан → исключить только этот цвет
+      if (!item.color) return false
+
+      return normalizeColor(item.color).includes(normalizeColor(disliked.color))
+    })
+
+    if (hasDisliked) {
+      console.log(`Product excluded: contains disliked flower ${disliked.flower}${disliked.color ? ' ' + disliked.color : ''}`)
+      return false
+    }
+  }
+
+  // ПРАВИЛО 2: Проверка ЖЕЛАЕМЫХ (гибкое правило)
+  if (preferences.liked.length > 0) {
+    const hasLikedFlower = preferences.liked.some(liked => {
+      return compositionItems.some(item => {
+        // Проверяем совпадение по названию цветка
+        const flowerMatches = normalizeFlower(item.flower).includes(normalizeFlower(liked.flower))
+
+        if (!flowerMatches) return false
+
+        // Если цвет НЕ указан в liked → подходит любой цвет
+        if (!liked.color) {
+          return true
+        }
+
+        // Если цвет указан → проверяем точное совпадение
+        if (!item.color) return false
+
+        return normalizeColor(item.color).includes(normalizeColor(liked.color))
+      })
+    })
+
+    if (!hasLikedFlower) {
+      console.log('Product excluded: does not contain liked flowers')
+      return false
+    }
+  }
+
+  return true
+}
+
+// Функция загрузки composition для списка товаров
+async function loadCompositions(guids: string[]): Promise<Map<string, any[]>> {
+  const compositions = new Map<string, any[]>()
+
+  // Загружаем все composition параллельно
+  const promises = guids.map(async (guid) => {
+    try {
+      const response = await fetch(`https://mcp.cvetov24.ru/api/v2/catalog_items/${guid}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.composition) {
+          compositions.set(guid, data.composition)
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to load composition for ${guid}:`, error)
+    }
+  })
+
+  await Promise.all(promises)
+  return compositions
 }
 
 // Проверка готовности к переходу в режим поиска

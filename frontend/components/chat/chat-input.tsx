@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Send, Mic, MicOff, Volume2 } from 'lucide-react';
@@ -11,14 +11,15 @@ interface ChatInputProps {
   onVoiceInput?: () => void;
 }
 
-export function ChatInput({ 
-  onSend, 
+export function ChatInput({
+  onSend,
   disabled = false,
   isListening = false,
   isSpeaking = false,
-  onVoiceInput 
+  onVoiceInput
 }: ChatInputProps) {
   const [inputText, setInputText] = useState('');
+  const inputContainerRef = useRef<HTMLDivElement>(null);
 
   const handleSend = () => {
     if (!inputText.trim()) return;
@@ -44,8 +45,18 @@ export function ChatInput({
     onVoiceInput?.();
   };
 
+  const handleInputFocus = () => {
+    // Небольшая задержка чтобы дать клавиатуре начать анимацию
+    setTimeout(() => {
+      inputContainerRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'end',
+      });
+    }, 300);
+  };
+
   return (
-    <div className="border-t border-gray-200 bg-white">
+    <div ref={inputContainerRef} className="border-t border-gray-200 bg-white">
       <div className="max-w-3xl mx-auto px-4 py-4">
         <div className="relative">
           <div className="flex gap-2 items-end">
@@ -54,6 +65,7 @@ export function ChatInput({
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
+                onFocus={handleInputFocus}
                 placeholder="Сообщение AI ассистенту..."
                 disabled={disabled}
                 className="py-3 border-gray-300 rounded-3xl focus:ring-2 focus:ring-gray-300 focus:border-transparent resize-none"

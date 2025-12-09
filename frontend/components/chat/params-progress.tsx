@@ -13,8 +13,8 @@ export function ParamsProgress({ params }: ParamsProgressProps) {
         <div className="flex flex-wrap gap-2">
           {/* Кому */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
-            params.recipient 
-              ? 'bg-green-100 text-green-800' 
+            params.recipient
+              ? 'bg-green-100 text-green-800'
               : 'bg-gray-200 text-gray-500'
           }`}>
             {params.recipient ? (
@@ -29,8 +29,8 @@ export function ParamsProgress({ params }: ParamsProgressProps) {
 
           {/* Повод */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
-            params.occasion 
-              ? 'bg-green-100 text-green-800' 
+            params.occasion
+              ? 'bg-green-100 text-green-800'
               : 'bg-gray-200 text-gray-500'
           }`}>
             {params.occasion ? (
@@ -45,8 +45,8 @@ export function ParamsProgress({ params }: ParamsProgressProps) {
 
           {/* Город */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
-            params.city 
-              ? 'bg-green-100 text-green-800' 
+            params.city
+              ? 'bg-green-100 text-green-800'
               : 'bg-gray-200 text-gray-500'
           }`}>
             {params.city ? (

@@ -5,18 +5,23 @@ import type { MCPProduct } from '@/types';
 interface ProductGridProps {
   products: MCPProduct[];
   onSelectProduct: (product: MCPProduct) => void;
-  initialVisible?: number;
+  citySlug?: string;
 }
 
-export function ProductGrid({ products, onSelectProduct, initialVisible = 8 }: ProductGridProps) {
-  const [visibleCount, setVisibleCount] = useState(initialVisible);
+const INITIAL_VISIBLE = 4;
+const LOAD_MORE_COUNT = 4;
+const MAX_VISIBLE = 16;
+
+export function ProductGrid({ products, onSelectProduct, citySlug }: ProductGridProps) {
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
 
   const handleShowMore = () => {
-    setVisibleCount((prev) => Math.min(prev + 4, products.length));
+    setVisibleCount((prev) => Math.min(prev + LOAD_MORE_COUNT, products.length, MAX_VISIBLE));
   };
 
   const visibleProducts = products.slice(0, visibleCount);
-  const hasMore = visibleCount < products.length;
+  const hasMore = visibleCount < products.length && visibleCount < MAX_VISIBLE;
+  const showSiteLink = visibleCount >= MAX_VISIBLE;
 
   return (
     <div>
@@ -29,7 +34,7 @@ export function ProductGrid({ products, onSelectProduct, initialVisible = 8 }: P
           />
         ))}
       </div>
-      
+
       {hasMore && (
         <button
           onClick={handleShowMore}
@@ -37,6 +42,17 @@ export function ProductGrid({ products, onSelectProduct, initialVisible = 8 }: P
         >
           Еще варианты
         </button>
+      )}
+
+      {showSiteLink && citySlug && (
+        <a
+          href={`https://cvetov.com/${citySlug}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 block w-full py-2 text-center text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors underline"
+        >
+          Больше вариантов на сайте
+        </a>
       )}
     </div>
   );

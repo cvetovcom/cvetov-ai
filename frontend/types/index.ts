@@ -23,6 +23,7 @@ export interface MCPProduct {
   }
   main_image: string
   images?: string[]
+  detailUrl?: string
   parent_category_slug: string
   shop_public_uuid: string
   shop_name?: string
