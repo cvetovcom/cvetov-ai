@@ -132,19 +132,14 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
             )}
           </div>
           {enableDirectLinks ? (
-            <Button
-              asChild
-              size="sm"
-              className="bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 flex-shrink-0"
+            <a
+              href={getProductUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 flex-shrink-0 rounded-md text-sm font-medium transition-colors"
             >
-              <a
-                href={getProductUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Купить
-              </a>
-            </Button>
+              Купить
+            </a>
           ) : (
             <Button
               onClick={() => onSelect(product)}
