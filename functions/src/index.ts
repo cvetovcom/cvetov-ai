@@ -1095,3 +1095,6 @@ export const chat = functions
       }
     })
   })
+
+// Export Telegram user functions
+export { saveTelegramUser, getTelegramStats } from './telegram-user'

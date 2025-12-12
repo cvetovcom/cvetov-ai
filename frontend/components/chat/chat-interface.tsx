@@ -13,12 +13,15 @@ import { ShoppingCart } from './shopping-cart';
 import { CheckoutModal } from './checkout-modal';
 import { TypingIndicator } from './typing-indicator';
 import { useSpeechRecognition, useSpeechSynthesis } from '@/lib/hooks';
+import { useTelegramUser } from '@/lib/hooks/useTelegramUser';
 import { sendChatMessage } from '@/lib/services/chat-api.service';
 import { generateQuickReplies } from '@/lib/utils/quick-replies-generator';
 import type { MCPProduct } from '@/types';
 import Image from 'next/image';
 
 export function ChatInterface() {
+  // Telegram Web App integration
+  const { user: telegramUser, isLoading: isTelegramLoading, isTelegram } = useTelegramUser();
   const [showSidebar, setShowSidebar] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
