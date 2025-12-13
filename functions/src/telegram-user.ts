@@ -186,3 +186,116 @@ export const getTelegramStats = functions.https.onRequest(async (req, res) => {
     })
   }
 })
+
+/**
+ * Отправка рассылки всем пользователям через Telegram Bot API
+ */
+export const sendBroadcast = functions.https.onRequest(async (req, res) => {
+  // CORS
+  res.set('Access-Control-Allow-Origin', '*')
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.set('Access-Control-Allow-Headers', 'Content-Type')
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('')
+    return
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+
+  try {
+    const { adminId, message } = req.body
+
+    // Проверка прав администратора
+    if (adminId !== '236692046') {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+
+    if (!message || typeof message !== 'string') {
+      res.status(400).json({ error: 'Message is required' })
+      return
+    }
+
+    const botToken = process.env.TELEGRAM_BOT_TOKEN
+    if (!botToken) {
+      res.status(500).json({ error: 'Bot token not configured' })
+      return
+    }
+
+    // Получаем всех пользователей
+    const usersSnapshot = await db.collection('telegram_users').get()
+    const users = usersSnapshot.docs.map(doc => doc.data()) as any[]
+
+    console.log(`Starting broadcast to ${users.length} users`)
+
+    const results = {
+      total: users.length,
+      sent: 0,
+      failed: 0,
+      errors: [] as any[],
+    }
+
+    // Отправляем сообщения с задержкой для избежания rate limit
+    for (const user of users) {
+      try {
+        const response = await fetch(
+          `https://api.telegram.org/bot${botToken}/sendMessage`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chat_id: user.id,
+              text: message,
+              parse_mode: 'HTML',
+            }),
+          }
+        )
+
+        if (response.ok) {
+          results.sent++
+          console.log(`Message sent to user ${user.id} (@${user.username || 'no_username'})`)
+        } else {
+          const error = await response.text()
+          results.failed++
+          results.errors.push({
+            user_id: user.id,
+            username: user.username,
+            error: error,
+          })
+          console.error(`Failed to send to ${user.id}:`, error)
+        }
+
+        // Задержка 50ms между сообщениями (макс 20 сообщений/сек)
+        await new Promise(resolve => setTimeout(resolve, 50))
+      } catch (error) {
+        results.failed++
+        results.errors.push({
+          user_id: user.id,
+          username: user.username,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+        console.error(`Error sending to ${user.id}:`, error)
+      }
+    }
+
+    console.log(`Broadcast complete: ${results.sent} sent, ${results.failed} failed`)
+
+    res.json({
+      success: true,
+      message: 'Broadcast completed',
+      results,
+    })
+  } catch (error) {
+    console.error('Error sending broadcast:', error)
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
