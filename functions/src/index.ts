@@ -1098,3 +1098,6 @@ export const chat = functions
 
 // Export Telegram user functions
 export { saveTelegramUser, getTelegramStats, sendBroadcast } from './telegram-user'
+
+// Export Telegram bot webhook
+export { telegramWebhook } from './telegram-bot'
