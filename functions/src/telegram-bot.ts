@@ -64,28 +64,49 @@ export const telegramWebhook = functions.https.onRequest(async (req, res) => {
         if (!userDoc.exists) {
           // Новый пользователь
           console.log(`Creating new user ${userId}`)
-          await userRef.set({
+          const userData: any = {
             id: userId,
-            first_name: update.message.from.first_name,
-            last_name: update.message.from.last_name,
-            username: update.message.from.username,
-            language_code: update.message.from.language_code,
             first_seen: admin.firestore.FieldValue.serverTimestamp(),
             last_seen: admin.firestore.FieldValue.serverTimestamp(),
             visit_count: 1,
-          })
+          }
+
+          // Добавляем только определённые поля
+          if (update.message.from.first_name !== undefined) {
+            userData.first_name = update.message.from.first_name
+          }
+          if (update.message.from.last_name !== undefined) {
+            userData.last_name = update.message.from.last_name
+          }
+          if (update.message.from.username !== undefined) {
+            userData.username = update.message.from.username
+          }
+          if (update.message.from.language_code !== undefined) {
+            userData.language_code = update.message.from.language_code
+          }
+
+          await userRef.set(userData)
           console.log(`User ${userId} created successfully`)
         } else {
           // Существующий пользователь - обновляем last_seen и счетчик
           console.log(`Updating existing user ${userId}`)
-          await userRef.update({
+          const updateData: any = {
             last_seen: admin.firestore.FieldValue.serverTimestamp(),
             visit_count: admin.firestore.FieldValue.increment(1),
-            // Обновляем данные пользователя на случай, если они изменились
-            first_name: update.message.from.first_name,
-            last_name: update.message.from.last_name,
-            username: update.message.from.username,
-          })
+          }
+
+          // Обновляем данные пользователя только если они определены
+          if (update.message.from.first_name !== undefined) {
+            updateData.first_name = update.message.from.first_name
+          }
+          if (update.message.from.last_name !== undefined) {
+            updateData.last_name = update.message.from.last_name
+          }
+          if (update.message.from.username !== undefined) {
+            updateData.username = update.message.from.username
+          }
+
+          await userRef.update(updateData)
         }
 
         const keyboard = {
