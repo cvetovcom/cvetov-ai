@@ -35,9 +35,7 @@ async function sendMessage(chatId: number, text: string, options?: any) {
 /**
  * Обработчик вебхука от Telegram
  */
-export const telegramWebhook = functions.https.onRequest(
-  { invoker: 'public' },
-  async (req, res) => {
+export const telegramWebhook = functions.https.onRequest(async (req, res) => {
   if (req.method !== 'POST') {
     res.status(200).send('OK')
     return
@@ -234,7 +232,6 @@ export const telegramWebhook = functions.https.onRequest(
         const users = usersSnapshot.docs.map(doc => doc.data())
 
         const totalUsers = users.length
-        const totalVisits = users.reduce((sum: number, u: any) => sum + (u.visit_count || 1), 0)
 
         // Последние 5 пользователей
         const recentUsers = users
