@@ -60,10 +60,12 @@ export const telegramWebhook = functions.https.onRequest(
 
         // Сохраняем пользователя в базу данных
         const userRef = db.collection('telegram_users').doc(String(userId))
+        console.log(`Checking user ${userId} in database...`)
         const userDoc = await userRef.get()
 
         if (!userDoc.exists) {
           // Новый пользователь
+          console.log(`Creating new user ${userId}`)
           await userRef.set({
             id: userId,
             first_name: update.message.from.first_name,
@@ -74,8 +76,10 @@ export const telegramWebhook = functions.https.onRequest(
             last_seen: admin.firestore.FieldValue.serverTimestamp(),
             visit_count: 1,
           })
+          console.log(`User ${userId} created successfully`)
         } else {
           // Существующий пользователь - обновляем last_seen и счетчик
+          console.log(`Updating existing user ${userId}`)
           await userRef.update({
             last_seen: admin.firestore.FieldValue.serverTimestamp(),
             visit_count: admin.firestore.FieldValue.increment(1),
@@ -224,7 +228,9 @@ export const telegramWebhook = functions.https.onRequest(
 
       // Статистика
       if (data === 'stats') {
+        console.log('Fetching user statistics...')
         const usersSnapshot = await db.collection('telegram_users').get()
+        console.log(`Found ${usersSnapshot.docs.length} documents in telegram_users collection`)
         const users = usersSnapshot.docs.map(doc => doc.data())
 
         const totalUsers = users.length
@@ -239,16 +245,22 @@ export const telegramWebhook = functions.https.onRequest(
           })
           .slice(0, 5)
 
-        let statsText = `📊 <b>Статистика пользователей</b>\n\n`
-        statsText += `👥 Всего пользователей: ${totalUsers}\n`
-        statsText += `📈 Всего визитов: ${totalVisits}\n\n`
-        statsText += `<b>Последние пользователи:</b>\n`
+        // Подсчитываем пользователей, которые открывали Mini App
+        const miniAppUsers = users.filter((u: any) => u.miniapp_opened).length
 
-        recentUsers.forEach((u: any, i: number) => {
-          const name = u.first_name || u.username || 'Неизвестный'
-          const username = u.username ? `@${u.username}` : ''
-          statsText += `${i + 1}. ${name} ${username}\n`
-        })
+        let statsText = `📊 <b>Статистика</b>\n\n`
+        statsText += `🤖 Запустили бота: ${totalUsers}\n`
+        statsText += `🌸 Открыли Mini App: ${miniAppUsers}\n\n`
+
+        if (recentUsers.length > 0) {
+          statsText += `<b>Последние пользователи:</b>\n`
+          recentUsers.forEach((u: any, i: number) => {
+            const name = u.first_name || u.username || 'Неизвестный'
+            const username = u.username ? `@${u.username}` : ''
+            const miniappMark = u.miniapp_opened ? '🌸' : ''
+            statsText += `${i + 1}. ${name} ${username} ${miniappMark}\n`
+          })
+        }
 
         const keyboard = {
           inline_keyboard: [

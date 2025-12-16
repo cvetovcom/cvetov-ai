@@ -109,6 +109,7 @@ export const saveTelegramUser = functions.https.onRequest(async (req, res) => {
 
     await userRef.set({
       ...telegramUser,
+      miniapp_opened: true,  // Флаг, что пользователь открывал Mini App
       first_seen: admin.firestore.FieldValue.serverTimestamp(),
       last_seen: admin.firestore.FieldValue.serverTimestamp(),
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -118,6 +119,7 @@ export const saveTelegramUser = functions.https.onRequest(async (req, res) => {
     await userRef.update({
       visit_count: admin.firestore.FieldValue.increment(1),
       last_seen: admin.firestore.FieldValue.serverTimestamp(),
+      miniapp_opened: true,
     })
 
     console.log(`Telegram user saved: ${user.id} (@${user.username || 'no_username'})`)
