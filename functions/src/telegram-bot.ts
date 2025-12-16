@@ -35,7 +35,9 @@ async function sendMessage(chatId: number, text: string, options?: any) {
 /**
  * Обработчик вебхука от Telegram
  */
-export const telegramWebhook = functions.https.onRequest(async (req, res) => {
+export const telegramWebhook = functions.https.onRequest(
+  { invoker: 'public' },
+  async (req, res) => {
   if (req.method !== 'POST') {
     res.status(200).send('OK')
     return
