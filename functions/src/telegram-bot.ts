@@ -35,7 +35,9 @@ async function sendMessage(chatId: number, text: string, options?: any) {
 /**
  * Обработчик вебхука от Telegram
  */
-export const telegramWebhook = functions.https.onRequest(async (req, res) => {
+export const telegramWebhook = functions
+  .region('europe-west1')
+  .https.onRequest(async (req, res) => {
   if (req.method !== 'POST') {
     res.status(200).send('OK')
     return
@@ -158,7 +160,7 @@ export const telegramWebhook = functions.https.onRequest(async (req, res) => {
         await sendMessage(chatId, '⏳ Отправляю рассылку...')
 
         // Отправляем рассылку через существующую функцию
-        const broadcastUrl = `https://us-central1-cvetov-ai.cloudfunctions.net/sendBroadcast`
+        const broadcastUrl = `https://europe-west1-cvetov-ai.cloudfunctions.net/sendBroadcast`
         const response = await fetch(broadcastUrl, {
           method: 'POST',
           headers: {

@@ -61,7 +61,9 @@ function validateTelegramWebAppData(
 /**
  * Сохранение пользователя Telegram
  */
-export const saveTelegramUser = functions.https.onRequest(async (req, res) => {
+export const saveTelegramUser = functions
+  .region('europe-west1')
+  .https.onRequest(async (req, res) => {
   // CORS
   res.set('Access-Control-Allow-Origin', '*')
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -141,7 +143,9 @@ export const saveTelegramUser = functions.https.onRequest(async (req, res) => {
 /**
  * Получение статистики пользователей
  */
-export const getTelegramStats = functions.https.onRequest(async (req, res) => {
+export const getTelegramStats = functions
+  .region('europe-west1')
+  .https.onRequest(async (req, res) => {
   // CORS
   res.set('Access-Control-Allow-Origin', '*')
   res.set('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -192,7 +196,9 @@ export const getTelegramStats = functions.https.onRequest(async (req, res) => {
 /**
  * Отправка рассылки всем пользователям через Telegram Bot API
  */
-export const sendBroadcast = functions.https.onRequest(async (req, res) => {
+export const sendBroadcast = functions
+  .region('europe-west1')
+  .https.onRequest(async (req, res) => {
   // CORS
   res.set('Access-Control-Allow-Origin', '*')
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS')

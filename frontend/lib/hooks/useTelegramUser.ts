@@ -37,10 +37,8 @@ export function useTelegramUser() {
   useEffect(() => {
     const sendUserData = async (telegramUser: TelegramUser) => {
       try {
-        const endpoint = process.env.NEXT_PUBLIC_CLOUD_FUNCTION_URL?.replace(
-          '/chat',
-          '/saveTelegramUser'
-        )
+        // saveTelegramUser is in europe-west1
+        const endpoint = 'https://europe-west1-cvetov-ai.cloudfunctions.net/saveTelegramUser'
 
         if (!endpoint) {
           console.warn('saveTelegramUser endpoint not configured')
