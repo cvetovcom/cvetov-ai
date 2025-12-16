@@ -58,11 +58,39 @@ export const telegramWebhook = functions.https.onRequest(
       if (text === '/start') {
         const isAdmin = userId === ADMIN_ID
 
+        // Сохраняем пользователя в базу данных
+        const userRef = db.collection('telegram_users').doc(String(userId))
+        const userDoc = await userRef.get()
+
+        if (!userDoc.exists) {
+          // Новый пользователь
+          await userRef.set({
+            id: userId,
+            first_name: update.message.from.first_name,
+            last_name: update.message.from.last_name,
+            username: update.message.from.username,
+            language_code: update.message.from.language_code,
+            first_seen: admin.firestore.FieldValue.serverTimestamp(),
+            last_seen: admin.firestore.FieldValue.serverTimestamp(),
+            visit_count: 1,
+          })
+        } else {
+          // Существующий пользователь - обновляем last_seen и счетчик
+          await userRef.update({
+            last_seen: admin.firestore.FieldValue.serverTimestamp(),
+            visit_count: admin.firestore.FieldValue.increment(1),
+            // Обновляем данные пользователя на случай, если они изменились
+            first_name: update.message.from.first_name,
+            last_name: update.message.from.last_name,
+            username: update.message.from.username,
+          })
+        }
+
         const keyboard = {
           inline_keyboard: [
             [
               {
-                text: '🌸 Открыть каталог',
+                text: '🌸 Открыть AI-ассистент',
                 web_app: { url: MINI_APP_URL },
               },
             ],
@@ -285,7 +313,7 @@ export const telegramWebhook = functions.https.onRequest(
           inline_keyboard: [
             [
               {
-                text: '🌸 Открыть каталог',
+                text: '🌸 Открыть AI-ассистент',
                 web_app: { url: MINI_APP_URL },
               },
             ],
