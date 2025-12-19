@@ -24,6 +24,7 @@ export function ChatInterface() {
   const { user: telegramUser, isLoading: isTelegramLoading, isTelegram } = useTelegramUser();
   const [showSidebar, setShowSidebar] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [loadingStatusMessage, setLoadingStatusMessage] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Feature flag для прямых ссылок на cvetov.com
@@ -92,6 +93,24 @@ export function ChatInterface() {
     // Показываем индикатор загрузки
     setLoading(true);
 
+    // Определяем сообщение о статусе загрузки
+    // Проверяем есть ли в сообщении указание на цветок или цвет
+    const contentLower = content.toLowerCase();
+    const hasFlowerOrColor =
+      contentLower.match(/роз|тюльпан|пион|хризантем|гвозд|лили|орхиде|ромашк|гербер/) ||
+      contentLower.match(/бел|красн|розов|персиков|желт|оранжев|голуб|сирен|бордов|пурпурн|беж|кремов|лилов|фиолетов/);
+
+    if (hasFlowerOrColor) {
+      // Если указаны свойства цветов
+      setLoadingStatusMessage(`Фильтрую товары по запросу "${content}"`);
+    } else if (session.params.city) {
+      // Если город уже выбран, но свойств нет
+      setLoadingStatusMessage(`Подбираю 16 букетов в магазинах г. ${session.params.city.name}`);
+    } else {
+      // Общий случай
+      setLoadingStatusMessage('Обрабатываю ваш запрос');
+    }
+
     try {
       // Вызываем Firebase Function для получения ответа
       const response = await sendChatMessage(
@@ -121,6 +140,7 @@ export function ChatInterface() {
       // Добавляем ответ ассистента
       // Если есть товары - не показываем быстрые кнопки
       setLoading(false);
+      setLoadingStatusMessage(''); // Очищаем статусное сообщение
       addMessage(response.message, 'assistant', {
         quickReplies: response.products && response.products.length > 0 ? undefined : quickReplies,
         products: response.products
@@ -128,6 +148,7 @@ export function ChatInterface() {
     } catch (error) {
       console.error('Error sending message:', error);
       setLoading(false);
+      setLoadingStatusMessage(''); // Очищаем статусное сообщение
       addMessage('Извините, произошла ошибка. Попробуйте еще раз.', 'assistant');
     }
   };
@@ -367,7 +388,7 @@ export function ChatInterface() {
                   ))}
 
                   {/* Typing Indicator */}
-                  {isLoading && <TypingIndicator />}
+                  {isLoading && <TypingIndicator statusMessage={loadingStatusMessage} />}
 
                   <div ref={messagesEndRef} />
                 </div>

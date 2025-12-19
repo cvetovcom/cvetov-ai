@@ -1,6 +1,10 @@
 import React from 'react';
 
-export function TypingIndicator() {
+interface TypingIndicatorProps {
+  statusMessage?: string;
+}
+
+export function TypingIndicator({ statusMessage }: TypingIndicatorProps) {
   return (
     <div className="mb-6">
       <div className="flex gap-3">
@@ -11,10 +15,15 @@ export function TypingIndicator() {
 
         {/* Typing Animation */}
         <div className="bg-gray-100 rounded-2xl px-5 py-4">
-          <div className="flex gap-1">
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1">
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            {statusMessage && (
+              <span className="text-sm text-gray-600">{statusMessage}</span>
+            )}
           </div>
         </div>
       </div>

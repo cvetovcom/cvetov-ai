@@ -605,19 +605,44 @@ async function searchProducts(params: {
 
     // Если есть хоть какие-то предпочтения
     if (parsedPreferences.liked.length > 0 || parsedPreferences.disliked.length > 0) {
+      // Сохраняем исходный список для fallback
+      const productsBeforeFilter = [...products]
+
       // Загружаем composition для всех товаров параллельно
       const guids = products.map((p: any) => p.guid)
       const compositions = await loadCompositions(guids)
 
       console.log(`Loaded ${compositions.size} compositions out of ${guids.length} products`)
 
-      // Фильтруем по preferences
+      // Фильтруем по preferences (composition)
       products = products.filter((product: any) => {
         const composition = compositions.get(product.guid)
         return matchesPreferences(composition, parsedPreferences)
       })
 
-      console.log(`After preferences filter: ${products.length} products`)
+      console.log(`After preferences filter (composition): ${products.length} products`)
+
+      // FALLBACK: Если найдено мало товаров (< 16), добавляем поиск по названию
+      if (products.length < 16) {
+        console.log('Not enough products, adding fallback search by name...')
+
+        // Ищем товары по названию из исходного списка
+        const productsByName = productsBeforeFilter.filter((product: any) => {
+          return matchesPreferencesByName(product.name, parsedPreferences)
+        })
+
+        console.log(`Found ${productsByName.length} products by name`)
+
+        // Объединяем результаты: сначала по composition, потом по названию
+        // Убираем дубликаты по guid
+        const existingGuids = new Set(products.map((p: any) => p.guid))
+        const additionalProducts = productsByName.filter(
+          (p: any) => !existingGuids.has(p.guid)
+        )
+
+        products = [...products, ...additionalProducts]
+        console.log(`Total after fallback: ${products.length} products`)
+      }
     }
   }
 
@@ -896,6 +921,76 @@ function matchesPreferences(
   return true
 }
 
+// Функция проверки товара по preferences (поиск по названию)
+function matchesPreferencesByName(
+  productName: string,
+  preferences: { liked: FlowerPreference[], disliked: FlowerPreference[] }
+): boolean {
+  if (!productName || productName.trim().length === 0) {
+    return false
+  }
+
+  const nameLower = productName.toLowerCase()
+
+  // ПРАВИЛО 1: Проверка НЕЖЕЛАЕМЫХ (жесткое правило)
+  for (const disliked of preferences.disliked) {
+    const flowerNormalized = normalizeFlower(disliked.flower)
+
+    // Проверяем, есть ли цветок в названии
+    const hasFlower = nameLower.includes(disliked.flower.toLowerCase()) ||
+                      nameLower.includes(flowerNormalized)
+
+    if (!hasFlower) continue
+
+    // Если цвет НЕ указан → исключить весь цветок
+    if (!disliked.color) {
+      console.log(`Product excluded by name: contains disliked flower ${disliked.flower}`)
+      return false
+    }
+
+    // Если цвет указан → исключить только если есть и цветок, и цвет
+    const colorNormalized = normalizeColor(disliked.color)
+    const hasColor = nameLower.includes(disliked.color.toLowerCase()) ||
+                     nameLower.includes(colorNormalized)
+
+    if (hasColor) {
+      console.log(`Product excluded by name: contains disliked ${disliked.flower} ${disliked.color}`)
+      return false
+    }
+  }
+
+  // ПРАВИЛО 2: Проверка ЖЕЛАЕМЫХ (гибкое правило)
+  if (preferences.liked.length > 0) {
+    const hasLikedFlower = preferences.liked.some(liked => {
+      const flowerNormalized = normalizeFlower(liked.flower)
+
+      // Проверяем, есть ли цветок в названии
+      const hasFlower = nameLower.includes(liked.flower.toLowerCase()) ||
+                        nameLower.includes(flowerNormalized)
+
+      if (!hasFlower) return false
+
+      // Если цвет НЕ указан → подходит любой цвет
+      if (!liked.color) {
+        return true
+      }
+
+      // Если цвет указан → проверяем наличие цвета в названии
+      const colorNormalized = normalizeColor(liked.color)
+      const hasColor = nameLower.includes(liked.color.toLowerCase()) ||
+                       nameLower.includes(colorNormalized)
+
+      return hasColor
+    })
+
+    if (!hasLikedFlower) {
+      return false
+    }
+  }
+
+  return true
+}
+
 // Функция загрузки composition для списка товаров
 async function loadCompositions(guids: string[]): Promise<Map<string, any[]>> {
   const compositions = new Map<string, any[]>()
@@ -917,6 +1012,137 @@ async function loadCompositions(guids: string[]): Promise<Map<string, any[]>> {
 
   await Promise.all(promises)
   return compositions
+}
+
+// Генерация сообщения об отсутствии товаров
+function generateNoProductsMessage(preferences?: string): string {
+  // Если есть preferences, то проблема скорее всего в них
+  if (preferences && preferences.trim().length > 0) {
+    return 'К сожалению, не нашел букетов с такими характеристиками. Попробуйте изменить цвет или цветок, или уберите фильтр.'
+  }
+
+  // Если нет preferences, проблема в городе/поводе
+  return 'К сожалению, не нашел подходящих букетов в вашем городе. Попробуйте выбрать другой город или повод.'
+}
+
+// Генерация персонализированного текста для списка товаров
+function generateProductListMessage(count: number, preferences?: string): string {
+  const countWord = count === 1 ? 'букет' : count < 5 ? 'букета' : 'букетов'
+
+  // Если нет preferences, возвращаем стандартное сообщение с подсказкой
+  if (!preferences || preferences.trim().length === 0) {
+    return `Отлично! Я подобрал ${count} ${countWord} для вас. Выберите понравившийся или напишите цвет или цветок для более точной фильтрации.`
+  }
+
+  // Парсим preferences для формирования персонализированного текста
+  const prefsLower = preferences.toLowerCase()
+
+  // Определяем упомянутые цвета
+  const colors: string[] = []
+  const colorMap: { [key: string]: string } = {
+    'бел': 'белые',
+    'красн': 'красные',
+    'розов': 'розовые',
+    'персиков': 'персиковые',
+    'желт': 'желтые',
+    'оранжев': 'оранжевые',
+    'голуб': 'голубые',
+    'сирен': 'сиреневые',
+    'бордов': 'бордовые',
+    'пурпурн': 'пурпурные',
+    'беж': 'бежевые',
+    'кремов': 'кремовые',
+    'лилов': 'лиловые',
+    'фиолетов': 'фиолетовые',
+  }
+
+  for (const [key, value] of Object.entries(colorMap)) {
+    if (prefsLower.includes(key)) {
+      colors.push(value)
+    }
+  }
+
+  // Определяем упомянутые цветы (творительный падеж для "с розами")
+  const flowers: string[] = []
+  const flowerMap: { [key: string]: string } = {
+    'роз': 'розами',
+    'тюльпан': 'тюльпанами',
+    'пион': 'пионами',
+    'хризантем': 'хризантемами',
+    'гвозд': 'гвоздиками',
+    'лили': 'лилиями',
+    'орхиде': 'орхидеями',
+    'ромашк': 'ромашками',
+    'гербер': 'герберами',
+    'альстромер': 'альстромериями',
+    'ирис': 'ирисами',
+    'фрез': 'фрезиями',
+    'гиацинт': 'гиацинтами',
+    'нарцисс': 'нарциссами',
+    'подсолнух': 'подсолнухами',
+    'эустом': 'эустомами',
+    'гортензи': 'гортензиями',
+    'калл': 'каллами',
+    'анемон': 'анемонами',
+    'астр': 'астрами',
+    'георгин': 'георгинами',
+    'дельфиниум': 'дельфиниумами',
+    'левкой': 'левкоями',
+    'маргаритк': 'маргаритками',
+    'матиол': 'матиолами',
+    'незабудк': 'незабудками',
+    'одуванчик': 'одуванчиками',
+    'петуни': 'петуниями',
+    'ранункул': 'ранункулюсами',
+    'сирен': 'сиренью',
+    'статиц': 'статицей',
+    'фиалк': 'фиалками',
+    'цикламен': 'цикламенами',
+    'мак': 'маками',
+    'васильк': 'васильками',
+    'вероник': 'верониками',
+    'лаванд': 'лавандой',
+    'протей': 'протеями',
+    'бруни': 'брунией',
+    'амарант': 'амарантами',
+    'целози': 'целозией',
+    'скабиоз': 'скабиозами',
+    'эхинац': 'эхинацеями',
+    'рудбеки': 'рудбекиями',
+    'краспеди': 'краспедией',
+    'антуриум': 'антуриумами',
+    'гладиолус': 'гладиолусами',
+    'агапантус': 'агапантусами',
+    'суккулент': 'суккулентами',
+    'веточк': 'веточками',
+    'зелен': 'зеленью',
+    'трав': 'травами',
+  }
+
+  for (const [key, value] of Object.entries(flowerMap)) {
+    if (prefsLower.includes(key)) {
+      flowers.push(value)
+    }
+  }
+
+  // Формируем сообщение на основе найденных предпочтений
+  if (colors.length > 0 && flowers.length > 0) {
+    // Есть и цвет, и цветок
+    const colorStr = colors.slice(0, 2).join(' и ')
+    const flowerStr = flowers.slice(0, 2).join(' и ')
+    return `Отлично! Я подобрал ${count} ${countWord} с ${colorStr} ${flowerStr}. Выберите понравившийся!`
+  } else if (flowers.length > 0) {
+    // Только цветок
+    const flowerStr = flowers.slice(0, 2).join(' и ')
+    return `Отлично! Я подобрал ${count} ${countWord} с ${flowerStr}. Выберите понравившийся!`
+  } else if (colors.length > 0) {
+    // Только цвет
+    const colorStr = colors.slice(0, 2).join(' и ')
+    return `Отлично! Я подобрал ${count} ${colorStr} ${countWord}. Выберите понравившийся!`
+  }
+
+  // Fallback - стандартное сообщение
+  return `Отлично! Я подобрал ${count} ${countWord} для вас. Выберите понравившийся!`
 }
 
 // Проверка готовности к переходу в режим поиска
@@ -1022,8 +1248,8 @@ export const chat = functions
             console.log(`Found ${products.length} products`)
 
             assistantMessage = products.length > 0
-              ? `Отлично! Я подобрал ${products.length} ${products.length === 1 ? 'букет' : products.length < 5 ? 'букета' : 'букетов'} для вас. Выберите понравившийся!`
-              : 'К сожалению, не нашел подходящих букетов в вашем городе. Попробуйте выбрать другой город или повод.'
+              ? generateProductListMessage(products.length, params.preferences || undefined)
+              : generateNoProductsMessage(params.preferences || undefined)
           } catch (error) {
             console.error('Error searching products:', error)
             assistantMessage = 'Извините, произошла ошибка при поиске товаров. Попробуйте еще раз.'
