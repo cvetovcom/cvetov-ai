@@ -52,36 +52,40 @@ export function ProductGrid({ products, onSelectProduct, citySlug }: ProductGrid
 
       {/* Info Block - Only when direct links are enabled */}
       {enableDirectLinks && (
-        <div className="mt-4 space-y-3">
-          {/* Info Message */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-sm text-blue-800 text-center">
-              Ассистент еще не научился принимать оплату, поэтому временно отправляем вас на сайт
-            </p>
+        <div className="mt-6 space-y-4">
+          {/* Info Message - стиль сообщения ассистента */}
+          <div className="flex gap-3">
+            <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-500">
+              <div className="w-3 h-3 bg-white rounded-full"></div>
+            </div>
+            <div className="flex-1">
+              <p className="text-gray-600 text-sm">
+                Пока я учусь принимать оплату — переходите на сайт для заказа
+              </p>
+            </div>
           </div>
 
-          {/* Promocode Block */}
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex items-center gap-3 flex-1">
-                <Tag className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <p className="text-sm text-gray-700">
-                  Промокод для скидки 500 руб
-                </p>
-              </div>
-              <div className="flex items-center gap-2 sm:ml-auto">
-                <div className="bg-white border-2 border-green-300 rounded-lg px-4 py-2 min-w-[100px] text-center">
-                  <span className="text-lg font-bold text-green-700 tracking-wider">CHAT</span>
-                </div>
+          {/* Promocode Block - минималистичный стиль */}
+          <div className="flex gap-3">
+            <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-500">
+              <Tag className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-gray-800 text-sm mb-2">Скидка 500 ₽ по промокоду:</p>
+              <div className="flex items-center gap-2">
+                <span className="bg-gray-100 rounded-xl px-4 py-2 font-mono font-semibold text-gray-800 tracking-wider">
+                  CHAT
+                </span>
                 <button
                   onClick={handleCopyPromocode}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors min-w-[140px] justify-center"
+                  className="text-purple-600 hover:text-purple-700 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  title="Копировать"
                 >
                   <Copy className="w-4 h-4" />
-                  <span className="text-sm font-medium">
-                    {copied ? 'Скопировано!' : 'Копировать'}
-                  </span>
                 </button>
+                {copied && (
+                  <span className="text-sm text-gray-500">Скопировано</span>
+                )}
               </div>
             </div>
           </div>
