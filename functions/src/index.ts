@@ -283,9 +283,21 @@ function extractParams(message: string): Partial<ChatParams> {
   const normalizedMessage = message.toLowerCase()
   const result: Partial<ChatParams> = {}
 
+  // Helper: проверка по границам слова (чтобы "др" не срабатывал на "подруге")
+  // Используем пробелы/начало/конец строки вместо \b, т.к. \b не работает с кириллицей
+  const matchesKeyword = (text: string, keyword: string): boolean => {
+    // Для коротких keywords (2-3 символа) требуем точное совпадение слова
+    if (keyword.length <= 3) {
+      const regex = new RegExp(`(^|\\s)${keyword}($|\\s)`, 'i')
+      return regex.test(text)
+    }
+    // Для длинных keywords используем includes
+    return text.includes(keyword)
+  }
+
   // 1. Поиск "кому"
   for (const recipient of RECIPIENTS) {
-    if (recipient.keywords.some(kw => normalizedMessage.includes(kw))) {
+    if (recipient.keywords.some(kw => matchesKeyword(normalizedMessage, kw))) {
       result.recipient = recipient.label
       break
     }
@@ -293,55 +305,201 @@ function extractParams(message: string): Partial<ChatParams> {
 
   // 2. Поиск "повод"
   for (const occasion of OCCASIONS) {
-    if (occasion.keywords.some(kw => normalizedMessage.includes(kw))) {
+    if (occasion.keywords.some(kw => matchesKeyword(normalizedMessage, kw))) {
       result.occasion = occasion.label
       break
     }
   }
 
-  // 3. Поиск города - ищем по названию и находим slug из CITY_COORDINATES
-  for (const city of CITIES) {
-    const cityPattern = new RegExp(city, 'i')
-    if (cityPattern.test(message)) {
-      // Ищем slug в CITY_COORDINATES по всем возможным вариантам
-      let foundSlug: string | null = null
+  // 3. Поиск города
+  // Функция нормализации города - убирает падежные окончания
+  const normalizeCityName = (text: string): string => {
+    // Убираем типичные падежные окончания русских городов
+    // казани → казань, москве → москва, самаре → самара
+    return text
+      .replace(/е$/i, 'а')      // москве → москва, самаре → самара
+      .replace(/и$/i, 'ь')      // казани → казань
+      .replace(/у$/i, 'а')      // москву → москва, самару → самара
+      .replace(/ой$/i, 'а')     // москвой → москва
+      .replace(/ью$/i, 'ь')     // казанью → казань
+  }
+
+  // Полная карта транслитерации русских названий в английские slug'и
+  const cityTranslitMap: Record<string, string> = {
+    'москва': 'moscow',
+    'санкт-петербург': 'saint-petersburg',
+    'новосибирск': 'novosibirsk',
+    'екатеринбург': 'ekaterinburg',
+    'казань': 'kazan',
+    'нижний новгород': 'nizhny-novgorod',
+    'челябинск': 'chelyabinsk',
+    'самара': 'samara',
+    'омск': 'omsk',
+    'ростов-на-дону': 'rostov-on-don',
+    'уфа': 'ufa',
+    'красноярск': 'krasnoyarsk',
+    'пермь': 'perm',
+    'воронеж': 'voronezh',
+    'волгоград': 'volgograd',
+    'краснодар': 'krasnodar',
+    'саратов': 'saratov',
+    'тюмень': 'tyumen',
+    'тольятти': 'tolyatti',
+    'ижевск': 'izhevsk',
+    'барнаул': 'barnaul',
+    'ульяновск': 'ulyanovsk',
+    'иркутск': 'irkutsk',
+    'хабаровск': 'khabarovsk',
+    'ярославль': 'yaroslavl',
+    'владивосток': 'vladivostok',
+    'махачкала': 'makhachkala',
+    'томск': 'tomsk',
+    'оренбург': 'orenburg',
+    'кемерово': 'kemerovo',
+    'новокузнецк': 'novokuznetsk',
+    'рязань': 'ryazan',
+    'астрахань': 'astrakhan',
+    'набережные челны': 'naberezhnye-chelny',
+    'пенза': 'penza',
+    'липецк': 'lipetsk',
+    'киров': 'kirov',
+    'чебоксары': 'cheboksary',
+    'тула': 'tula',
+    'калининград': 'kaliningrad',
+    'брянск': 'bryansk',
+    'курск': 'kursk',
+    'иваново': 'ivanovo',
+    'магнитогорск': 'magnitogorsk',
+    'тверь': 'tver',
+    'ставрополь': 'stavropol',
+    'белгород': 'belgorod',
+    'сочи': 'sochi',
+    'нижний тагил': 'nizhny-tagil',
+    'владимир': 'vladimir',
+    'архангельск': 'arkhangelsk',
+    'калуга': 'kaluga',
+    'смоленск': 'smolensk',
+    'волжский': 'volzhsky',
+    'мурманск': 'murmansk',
+    'саранск': 'saransk',
+    'вологда': 'vologda',
+    'тамбов': 'tambov',
+    'старый оскол': 'stary-oskol',
+    'йошкар-ола': 'yoshkar-ola',
+    'таганрог': 'taganrog',
+    'комсомольск-на-амуре': 'komsomolsk-on-amur',
+    'сыктывкар': 'syktyvkar',
+    'нижневартовск': 'nizhnevartovsk',
+    'якутск': 'yakutsk',
+    'чита': 'chita',
+    'орёл': 'oryol',
+    'орел': 'oryol',
+    'грозный': 'grozny',
+    'улан-удэ': 'ulan-ude',
+    'благовещенск': 'blagoveshchensk',
+    'владикавказ': 'vladikavkaz',
+    'сургут': 'surgut',
+    'петрозаводск': 'petrozavodsk',
+    'кострома': 'kostroma',
+    'норильск': 'norilsk',
+    'псков': 'pskov',
+    'балашиха': 'balashikha',
+    'химки': 'khimki',
+    'красногорск': 'krasnogorsk',
+    'ногинск': 'noginsk',
+    'коломна': 'kolomna',
+    'подольск': 'podolsk',
+    'электросталь': 'elektrostal',
+    'ивантеевка': 'ivanteyevka',
+    'фрязино': 'fryazino',
+    'сертолово': 'sertrolovo',
+    'пятигорск': 'pyatigorsk',
+    'абакан': 'abakan',
+    'майкоп': 'majkop',
+    'ялта': 'yalta',
+    'севастополь': 'sevastopol',
+    'южно-сахалинск': 'yuzhno-sakhalinsk',
+    'находка': 'nakhodka',
+    'ангарск': 'angarsk',
+    'златоуст': 'zlatoust',
+    'каменск-уральский': 'kamensk-uralsky',
+    'энгельс': 'engels',
+    'серпухов': 'serpukhov',
+    'мытищи': 'mytishchi',
+    'люберцы': 'lyubertsy',
+    'королёв': 'korolev',
+    'королев': 'korolev',
+    'одинцово': 'odintsovo',
+    'реутов': 'reutov',
+    'щёлково': 'shchyolkovo',
+    'щелково': 'shchyolkovo',
+  }
+
+  // Алиасы для коротких/разговорных названий
+  const cityAliases: Record<string, string> = {
+    'спб': 'санкт-петербург',
+    'питер': 'санкт-петербург',
+    'петербург': 'санкт-петербург',
+    'мск': 'москва',
+    'екб': 'екатеринбург',
+    'нск': 'новосибирск',
+    'ннов': 'нижний новгород',
+    'нижний': 'нижний новгород',
+    'ростов': 'ростов-на-дону',
+    'челябы': 'челябинск',
+    'новосиб': 'новосибирск',
+    'владик': 'владивосток',
+    'волгоград': 'волгоград',
+  }
+
+  // Функция поиска города в тексте
+  const findCityInText = (text: string): { name: string; slug: string } | null => {
+    const words = text.toLowerCase().split(/[\s,\.]+/)
+
+    // 1. Проверяем алиасы (спб, мск и т.д.)
+    for (const word of words) {
+      if (cityAliases[word]) {
+        const normalizedCity = cityAliases[word]
+        const slug = cityTranslitMap[normalizedCity]
+        if (slug) {
+          // Находим оригинальное название города из CITIES
+          const originalName = CITIES.find(c => c.toLowerCase() === normalizedCity) || normalizedCity
+          return { name: originalName, slug }
+        }
+      }
+    }
+
+    // 2. Ищем полные названия городов
+    for (const city of CITIES) {
       const cityLower = city.toLowerCase()
 
-      // Проверяем разные варианты slug
-      const possibleSlugs = [
-        cityLower.replace(/\s+/g, '-'),           // "санкт-петербург"
-        cityLower.replace(/\s+/g, ''),             // "санктпетербург"
-        cityLower.replace(/ё/g, 'е').replace(/\s+/g, '-'),  // замена ё на е
-      ]
-
-      // Добавляем транслитерацию для популярных городов
-      const translitMap: Record<string, string> = {
-        'казань': 'kazan',
-        'москва': 'moscow',
-        'санкт-петербург': 'saint-petersburg',
-        'екатеринбург': 'ekaterinburg',
+      // Проверяем точное совпадение
+      if (text.toLowerCase().includes(cityLower)) {
+        const slug = cityTranslitMap[cityLower]
+        if (slug && CITY_COORDINATES[slug]) {
+          return { name: city, slug }
+        }
       }
 
-      if (translitMap[cityLower.replace(/\s+/g, '-')]) {
-        foundSlug = translitMap[cityLower.replace(/\s+/g, '-')]
-      } else {
-        // Ищем в CITY_COORDINATES
-        for (const slug of Object.keys(CITY_COORDINATES)) {
-          if (possibleSlugs.some(ps => slug === ps || slug.includes(ps) || ps.includes(slug))) {
-            foundSlug = slug
-            break
+      // Проверяем падежные формы
+      for (const word of words) {
+        const normalizedWord = normalizeCityName(word)
+        if (normalizedWord === cityLower || word === cityLower) {
+          const slug = cityTranslitMap[cityLower]
+          if (slug && CITY_COORDINATES[slug]) {
+            return { name: city, slug }
           }
         }
       }
-
-      if (foundSlug) {
-        result.city = {
-          name: city,
-          slug: foundSlug
-        }
-        break
-      }
     }
+
+    return null
+  }
+
+  // Ищем город в сообщении
+  const foundCity = findCityInText(message)
+  if (foundCity) {
+    result.city = foundCity
   }
 
   // 4. Извлечение адреса доставки (если найден город)
@@ -451,7 +609,7 @@ async function getAddressCoordinates(
   }
 }
 
-// Функция для вызова MCP API поиска товаров
+// Функция для вызова MCP API поиска товаров (ОПТИМИЗИРОВАННАЯ ВЕРСИЯ)
 async function searchProducts(params: {
   city: { name: string; slug: string } | null
   delivery_address?: string | null
@@ -461,14 +619,14 @@ async function searchProducts(params: {
   min_price?: number
   max_price?: number
 }): Promise<any[]> {
-  // 1. Определяем координаты для фильтрации
+  const startTime = Date.now()
+
+  // 1. Определяем координаты для фильтрации по зоне доставки
   let coordinates: { lat: number; lon: number } | null = null
 
   if (params.delivery_address && params.city?.name) {
-    // Приоритет 1: Точный адрес доставки → DaData API
     console.log('Trying to geocode delivery address:', params.delivery_address)
     coordinates = await getAddressCoordinates(params.delivery_address, params.city.name)
-
     if (coordinates) {
       console.log('Using delivery address coordinates:', coordinates)
     } else {
@@ -477,11 +635,9 @@ async function searchProducts(params: {
   }
 
   if (!coordinates) {
-    // Приоритет 2: Координаты центра города (fallback)
     const citySlug = params.city?.slug
     if (citySlug) {
       coordinates = CITY_COORDINATES[citySlug]
-
       if (coordinates) {
         console.log('Using city center coordinates for', citySlug, ':', coordinates)
       } else {
@@ -492,149 +648,94 @@ async function searchProducts(params: {
     }
   }
 
-  // 2. Получаем ВСЕ товары с фильтрацией по координатам (постранично)
-  let products: any[] = []
-  let page = 0
-  const pageSize = 100
-  let hasMore = true
+  // 2. Получаем магазины в зоне доставки (параллельно с товарами)
+  const shopsUrl = new URL('https://mcp.cvetov24.ru/api/v1/shops/get_delivery_shops')
+  shopsUrl.searchParams.append('lat', coordinates.lat.toString())
+  shopsUrl.searchParams.append('lon', coordinates.lon.toString())
 
-  console.log('Fetching ALL products with coordinates:', coordinates)
+  // 3. Получаем товары из ОПТИМИЗИРОВАННОГО API (с фильтрами на сервере)
+  const catalogUrl = new URL('https://mcp.cvetov24.ru/api/v2/catalog_items_optimized')
+  catalogUrl.searchParams.append('parent_category_slug', 'flowers')
+  catalogUrl.searchParams.append('include_composition', 'true')
+  catalogUrl.searchParams.append('page_size', '500') // Берём больше, потом фильтруем по магазинам
 
-  while (hasMore) {
-    const url = new URL('https://mcp.cvetov24.ru/api/v2/catalog_items')
-    url.searchParams.append('lat', coordinates.lat.toString())
-    url.searchParams.append('lon', coordinates.lon.toString())
-    url.searchParams.append('page', page.toString())
-    url.searchParams.append('page_size', pageSize.toString())
-
-    const response = await fetch(url.toString())
-
-    if (!response.ok) {
-      throw new Error(`MCP API error: ${response.status}`)
-    }
-
-    const data = await response.json()
-    const pageProducts = data.catalog_items || []
-
-    if (pageProducts.length === 0) {
-      hasMore = false
-    } else {
-      products.push(...pageProducts)
-      console.log(`Fetched page ${page}: ${pageProducts.length} products (total: ${products.length})`)
-
-      // Если получили меньше чем page_size, значит это последняя страница
-      if (pageProducts.length < pageSize) {
-        hasMore = false
-      } else {
-        page++
-      }
-    }
+  if (params.min_price !== undefined) {
+    catalogUrl.searchParams.append('min_price', params.min_price.toString())
+  }
+  if (params.max_price !== undefined) {
+    catalogUrl.searchParams.append('max_price', params.max_price.toString())
   }
 
-  console.log(`Fetched total ${products.length} products from ${page + 1} pages`)
+  console.log('Fetching from optimized API:', catalogUrl.toString())
 
-  // Добавляем поле images с оригинальным main_image (фронтенд сам уменьшит до 640x640)
+  // Запускаем оба запроса параллельно
+  const [shopsResponse, catalogResponse] = await Promise.all([
+    fetch(shopsUrl.toString()),
+    fetch(catalogUrl.toString())
+  ])
+
+  console.log(`API requests completed in ${Date.now() - startTime}ms`)
+
+  // Обрабатываем магазины
+  let shopGuids = new Set<string>()
+  if (shopsResponse.ok) {
+    const shopsData = await shopsResponse.json()
+    const shops = Array.isArray(shopsData) ? shopsData : (shopsData.shops || [])
+    shopGuids = new Set(shops.map((s: any) => s.guid))
+    console.log(`Found ${shopGuids.size} shops in delivery zone`)
+  } else {
+    console.warn('Failed to fetch shops, skipping delivery zone filter')
+  }
+
+  // Обрабатываем товары
+  if (!catalogResponse.ok) {
+    throw new Error(`Optimized API error: ${catalogResponse.status}`)
+  }
+
+  const catalogData = await catalogResponse.json()
+  let products = catalogData.catalog_items || []
+
+  console.log(`Got ${products.length} flowers from optimized API`)
+
+  // 4. Фильтруем по магазинам в зоне доставки
+  if (shopGuids.size > 0) {
+    const beforeFilter = products.length
+    products = products.filter((p: any) => shopGuids.has(p.shop_public_uuid))
+    console.log(`After delivery zone filter: ${products.length} products (was ${beforeFilter})`)
+  }
+
+  // Добавляем поле images
   products = products.map((product: any) => ({
     ...product,
     images: product.main_image ? [product.main_image] : [],
     detailUrl: `https://mcp.cvetov24.ru/api/v2/catalog_items/${product.guid}`
   }))
 
-  // 3. ФИЛЬТРАЦИЯ: Только категория "Цветы" (flowers)
-  console.log(`Sample product parent_category_slug:`, products[0]?.parent_category_slug)
-
-  // Фильтруем только товары с parent_category_slug === 'flowers'
-  const beforeFilterCount = products.length
-  products = products.filter((product: any) => {
-    return product.parent_category_slug === 'flowers'
-  })
-
-  console.log(`After "flowers" filter: ${products.length} products (was ${beforeFilterCount})`)
-
-  if (products.length === 0) {
-    console.warn('⚠️ No products found in "flowers" category')
-  }
-
-  // 4. Получаем магазины в зоне доставки для добавления названий
-  const shopsUrl = new URL('https://mcp.cvetov24.ru/api/v1/shops/get_delivery_shops')
-  shopsUrl.searchParams.append('lat', coordinates.lat.toString())
-  shopsUrl.searchParams.append('lon', coordinates.lon.toString())
-
-  const shopsResponse = await fetch(shopsUrl.toString())
-
-  if (shopsResponse.ok) {
-    const shopsData = await shopsResponse.json()
-    const shops = Array.isArray(shopsData) ? shopsData : (shopsData.shops || [])
-
-    // Создаем мапу shop_guid → shop_name
-    const shopNamesMap = new Map(shops.map((s: any) => [s.guid, s.name]))
-
-    console.log(`Found ${shops.length} shops in delivery zone`)
-
-    // Добавляем shop_name к товарам
-    products = products.map((p: any) => ({
-      ...p,
-      shop_name: shopNamesMap.get(p.shop_public_uuid) || 'Неизвестный магазин'
-    }))
-  } else {
-    console.warn('Failed to fetch shop names, using fallback')
-    products = products.map((p: any) => ({
-      ...p,
-      shop_name: 'Магазин цветов'
-    }))
-  }
-
-  // 4. Дополнительная фильтрация по цене (если указана)
-  if (params.min_price !== undefined) {
-    products = products.filter((p: any) => p.price.final_price >= params.min_price!)
-    console.log(`After min_price filter: ${products.length} products`)
-  }
-
-  if (params.max_price !== undefined) {
-    products = products.filter((p: any) => p.price.final_price <= params.max_price!)
-    console.log(`After max_price filter: ${products.length} products`)
-  }
-
-  // 5. НОВАЯ ФИЛЬТРАЦИЯ: По preferences (состав букета)
+  // 5. Фильтрация по preferences (используем composition из ответа API)
   if (params.preferences && params.preferences.trim().length > 0) {
     console.log('Filtering by preferences:', params.preferences)
 
-    // Парсим preferences
     const parsedPreferences = await parsePreferences(params.preferences)
     console.log('Parsed preferences:', parsedPreferences)
 
-    // Если есть хоть какие-то предпочтения
     if (parsedPreferences.liked.length > 0 || parsedPreferences.disliked.length > 0) {
-      // Сохраняем исходный список для fallback
       const productsBeforeFilter = [...products]
 
-      // Загружаем composition для всех товаров параллельно
-      const guids = products.map((p: any) => p.guid)
-      const compositions = await loadCompositions(guids)
-
-      console.log(`Loaded ${compositions.size} compositions out of ${guids.length} products`)
-
-      // Фильтруем по preferences (composition)
+      // Composition уже включён в ответ API — не нужно делать доп. запросы!
       products = products.filter((product: any) => {
-        const composition = compositions.get(product.guid)
-        return matchesPreferences(composition, parsedPreferences)
+        return matchesPreferences(product.composition, parsedPreferences)
       })
 
-      console.log(`After preferences filter (composition): ${products.length} products`)
+      console.log(`After preferences filter: ${products.length} products`)
 
-      // FALLBACK: Если найдено мало товаров (< 16), добавляем поиск по названию
+      // FALLBACK: поиск по названию
       if (products.length < 16) {
         console.log('Not enough products, adding fallback search by name...')
 
-        // Ищем товары по названию из исходного списка
         const productsByName = productsBeforeFilter.filter((product: any) => {
           return matchesPreferencesByName(product.name, parsedPreferences)
         })
 
-        console.log(`Found ${productsByName.length} products by name`)
-
-        // Объединяем результаты: сначала по composition, потом по названию
-        // Убираем дубликаты по guid
         const existingGuids = new Set(products.map((p: any) => p.guid))
         const additionalProducts = productsByName.filter(
           (p: any) => !existingGuids.has(p.guid)
@@ -649,15 +750,14 @@ async function searchProducts(params: {
   // 6. Возвращаем до 16 товаров
   const finalProducts = products.slice(0, 16)
 
-  // Логируем первый товар для проверки
+  console.log(`Search completed in ${Date.now() - startTime}ms, returning ${finalProducts.length} products`)
+
   if (finalProducts.length > 0) {
-    console.log('First product sample:', JSON.stringify({
+    console.log('First product:', JSON.stringify({
       guid: finalProducts[0].guid,
       name: finalProducts[0].name,
-      images: finalProducts[0].images,
-      main_image: finalProducts[0].main_image,
-      hasImages: !!finalProducts[0].images,
-      imagesLength: finalProducts[0].images?.length
+      shop: finalProducts[0].shop_name,
+      hasComposition: !!finalProducts[0].composition
     }))
   }
 
@@ -989,29 +1089,6 @@ function matchesPreferencesByName(
   }
 
   return true
-}
-
-// Функция загрузки composition для списка товаров
-async function loadCompositions(guids: string[]): Promise<Map<string, any[]>> {
-  const compositions = new Map<string, any[]>()
-
-  // Загружаем все composition параллельно
-  const promises = guids.map(async (guid) => {
-    try {
-      const response = await fetch(`https://mcp.cvetov24.ru/api/v2/catalog_items/${guid}`)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.composition) {
-          compositions.set(guid, data.composition)
-        }
-      }
-    } catch (error) {
-      console.error(`Failed to load composition for ${guid}:`, error)
-    }
-  })
-
-  await Promise.all(promises)
-  return compositions
 }
 
 // Генерация сообщения об отсутствии товаров

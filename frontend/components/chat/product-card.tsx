@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import type { MCPProduct } from '@/types';
 import { getThumbnailUrl } from '@/lib/utils/image-utils';
+import { trackProductLinkClick, trackProductClick, addUtmParams } from '@/lib/services/analytics.service';
 
 interface ProductCardProps {
   product: MCPProduct;
@@ -20,15 +21,26 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
   // Feature flag для прямых ссылок на cvetov.com
   const enableDirectLinks = process.env.NEXT_PUBLIC_ENABLE_DIRECT_LINKS === 'true';
 
-  // Генерация URL товара на cvetov.com
+  // Генерация URL товара на cvetov.com с UTM-метками
   const getProductUrl = (): string => {
+    let url: string;
+
     // Используем parent_category_slug и slug из MCPProduct
     if (product.slug && product.parent_category_slug) {
-      return `https://cvetov.com/product/${product.parent_category_slug}/${product.slug}/`;
+      url = `https://cvetov.com/product/${product.parent_category_slug}/${product.slug}/`;
+    } else {
+      // Fallback если slug отсутствует
+      url = product.detailUrl || 'https://cvetov.com';
     }
 
-    // Fallback если slug отсутствует
-    return product.detailUrl || 'https://cvetov.com';
+    // Добавляем UTM-метки для отслеживания в Метрике cvetov.com
+    return addUtmParams(url);
+  };
+
+  // Обработчик клика на ссылку "Купить"
+  const handleProductLinkClick = () => {
+    const url = getProductUrl();
+    trackProductLinkClick(product.name, product.price.final_price, url);
   };
 
   // Форматирование цены без копеек
@@ -136,13 +148,18 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
               href={getProductUrl()}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={handleProductLinkClick}
               className="inline-flex items-center justify-center bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 flex-shrink-0 rounded-md text-sm font-medium transition-colors"
             >
               Купить
             </a>
           ) : (
             <Button
-              onClick={() => onSelect(product)}
+              onClick={() => {
+                // Отслеживаем клик на кнопку "Купить"
+                trackProductClick(product.name, product.price.final_price, product.shop_name);
+                onSelect(product);
+              }}
               size="sm"
               className="bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 flex-shrink-0"
             >

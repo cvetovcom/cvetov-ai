@@ -1,0 +1,11 @@
+# AI-ассистент Цветов.ру
+# https://ai.cvetov.com
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://ai.cvetov.com/sitemap.xml
+
+# Host
+Host: https://ai.cvetov.com

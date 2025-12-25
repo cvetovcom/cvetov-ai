@@ -15,6 +15,17 @@ import { TypingIndicator } from './typing-indicator';
 import { useSpeechRecognition, useSpeechSynthesis } from '@/lib/hooks';
 import { useTelegramUser } from '@/lib/hooks/useTelegramUser';
 import { sendChatMessage } from '@/lib/services/chat-api.service';
+import {
+  trackChatStarted,
+  trackMessageSent,
+  trackRecipientSet,
+  trackOccasionSet,
+  trackCitySet,
+  trackCatalogShown,
+  trackCartAdd,
+  trackCheckoutStart,
+  trackOrderComplete,
+} from '@/lib/services/analytics.service';
 import { generateQuickReplies } from '@/lib/utils/quick-replies-generator';
 import type { MCPProduct } from '@/types';
 import Image from 'next/image';
@@ -66,6 +77,9 @@ export function ChatInterface() {
   // Add initial greeting message when chat is opened
   useEffect(() => {
     if (showChat && session.messages.length === 0) {
+      // Отслеживаем начало чата
+      trackChatStarted();
+
       const quickReplies = generateQuickReplies(session.params);
       addMessage(
         'Привет! 🌸 Я AI-ассистент Цветов.ру. Помогу подобрать идеальный букет. Для кого вы хотите заказать цветы?',
@@ -89,6 +103,10 @@ export function ChatInterface() {
 
     // Добавляем сообщение пользователя
     addMessage(content, 'user');
+
+    // Отслеживаем отправку сообщения
+    const userMessagesCount = session.messages.filter(m => m.role === 'user').length + 1;
+    trackMessageSent(content, userMessagesCount);
 
     // Показываем индикатор загрузки
     setLoading(true);
@@ -128,8 +146,22 @@ export function ChatInterface() {
         Object.entries(response.extractedParams).forEach(([key, value]) => {
           if (value !== undefined && value !== null) {
             updateParam(key as any, value);
+
+            // Отслеживаем установку параметров воронки
+            if (key === 'recipient' && typeof value === 'string') {
+              trackRecipientSet(value);
+            } else if (key === 'occasion' && typeof value === 'string') {
+              trackOccasionSet(value);
+            } else if (key === 'city' && typeof value === 'object' && value !== null && 'name' in value) {
+              trackCitySet((value as { name: string }).name);
+            }
           }
         });
+      }
+
+      // Отслеживаем показ каталога товаров
+      if (response.products && response.products.length > 0) {
+        trackCatalogShown(response.products.length);
       }
 
       // Используем быстрые кнопки из ответа API (если есть)
@@ -161,6 +193,10 @@ export function ChatInterface() {
   // Обработка выбора товара
   const handleSelectProduct = (product: MCPProduct) => {
     addToCart(product);
+
+    // Отслеживаем добавление в корзину
+    trackCartAdd(product.name, product.price.final_price);
+
     addMessage('Товар добавлен в корзину! Хотите продолжить выбор?', 'assistant', {
       quickReplies: ['Показать ещё', 'Изменить параметры'],
     });
@@ -176,6 +212,9 @@ export function ChatInterface() {
 
   // Обработка оформления заказа
   const handleCheckout = () => {
+    // Отслеживаем начало оформления заказа
+    trackCheckoutStart(getTotalPrice(), cart.length);
+
     setCheckoutOpen(true);
   };
 
@@ -183,12 +222,15 @@ export function ChatInterface() {
   const handleSubmitOrder = (orderData: any) => {
     console.log('Order submitted:', orderData);
     // TODO: Отправить заказ на backend
-    
+
+    // Отслеживаем завершение заказа
+    trackOrderComplete(getTotalPrice(), cart.length);
+
     addMessage(
       'Спасибо за заказ! Ваш заказ принят и будет доставлен в указанное время. Мы отправили SMS с подтверждением.',
       'assistant'
     );
-    
+
     setCheckoutOpen(false);
     // TODO: Очистить корзину после успешного заказа
   };
