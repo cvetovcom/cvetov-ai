@@ -91,6 +91,28 @@ function getConsultationPrompt(params: ChatParams): string {
 Начинай общение приветливо и задавай вопросы для недостающих параметров.`
 }
 
+// Промпт для ответов на вопросы (когда параметры уже собраны)
+function getQuestionPrompt(params: ChatParams): string {
+  return `Ты - AI-ассистент Цветов.ру. Клиент выбирает букет.
+
+КОНТЕКСТ ЗАКАЗА:
+- Кому: ${params.recipient}
+- Повод: ${params.occasion}
+- Город: ${params.city?.name}
+- Предпочтения: ${params.preferences || 'не указаны'}
+
+ТВОЯ ЗАДАЧА:
+Ответь на вопрос клиента КРАТКО (1-3 предложения).
+НЕ предлагай конкретные товары — они покажутся автоматически.
+Будь дружелюбным и профессиональным.
+
+Если клиент просто написал "ок", "хорошо", "понял" или подобное — спроси чем ещё можешь помочь.
+
+ПРИМЕРЫ:
+- Вопрос "Сколько стоит доставка?" → "Стоимость доставки зависит от адреса и времени, обычно от 300 до 600 рублей. Точную стоимость вы увидите при оформлении заказа."
+- Вопрос "Какие розы лучше?" → "Для подарка маме отлично подойдут кустовые или пионовидные розы — они особенно нежные и ароматные."`
+}
+
 // Эта функция больше не используется - режим поиска работает напрямую без Claude
 // function getSearchPrompt() удалена
 
@@ -433,6 +455,23 @@ function extractParams(message: string): Partial<ChatParams> {
     'реутов': 'reutov',
     'щёлково': 'shchyolkovo',
     'щелково': 'shchyolkovo',
+    // Средние и малые города (из CITY_COORDINATES)
+    'нефтекамск': 'neftekamsk',
+    'салават': 'salavat',
+    'первоуральск': 'pervouralsk',
+    'соликамск': 'solikamsk',
+    'железногорск': 'zheleznogorsk',
+    'тихорецк': 'tikhoretsk',
+    'печора': 'pechora',
+    'урай': 'uray',
+    'орехово-зуево': 'orekhovo-zuevo',
+    'балаково': 'balakovo',
+    'ачинск': 'achinsk',
+    'братск': 'bratsk',
+    'миасс': 'miass',
+    'уссурийск': 'ussuriysk',
+    'северодвинск': 'severodvinsk',
+    'петропавловск-камчатский': 'petropavlovsk-kamchatsky',
   }
 
   // Алиасы для коротких/разговорных названий
@@ -553,6 +592,74 @@ function extractParams(message: string): Partial<ChatParams> {
   return result
 }
 
+// Определяет есть ли в сообщении вопрос
+function hasQuestion(message: string, extractedParams: Partial<ChatParams>): boolean {
+  const msgLower = message.toLowerCase()
+
+  // 1. Проверяем вопросительные слова — это всегда вопрос
+  const questionWords = ['как', 'какой', 'какая', 'какие', 'какое', 'почему', 'зачем', 'сколько', 'когда', 'где', 'куда', 'откуда', 'кто', 'что', 'чем', 'можно ли', 'есть ли', 'будет ли']
+  for (const qw of questionWords) {
+    if (msgLower.startsWith(qw + ' ') || msgLower.includes(' ' + qw + ' ')) {
+      console.log('hasQuestion: found question word:', qw)
+      return true
+    }
+  }
+
+  // 2. Вопросительный знак — это вопрос
+  if (message.includes('?')) {
+    console.log('hasQuestion: found question mark')
+    return true
+  }
+
+  // 3. Если нет явных признаков вопроса — проверяем остаток текста
+  let remainingText = msgLower
+
+  // Убираем город
+  if (extractedParams.city?.name) {
+    remainingText = remainingText.replace(extractedParams.city.name.toLowerCase(), '')
+  }
+
+  // Убираем recipient keywords
+  const recipientKeywords = ['маме', 'мама', 'жене', 'жена', 'девушке', 'подруге', 'коллеге', 'сестре', 'дочке', 'бабушке', 'мужу', 'муж', 'папе', 'папа', 'другу', 'друг']
+  for (const kw of recipientKeywords) {
+    remainingText = remainingText.replace(new RegExp(kw, 'gi'), '')
+  }
+
+  // Убираем occasion keywords
+  const occasionKeywords = ['день рождения', 'др', 'юбилей', 'свадьба', '8 марта', 'новый год', 'день матери', 'день святого валентина', '14 февраля', 'просто так']
+  for (const kw of occasionKeywords) {
+    remainingText = remainingText.replace(new RegExp(kw, 'gi'), '')
+  }
+
+  // Убираем названия цветов (но НЕ весь preferences текст)
+  const flowerNames = ['роза', 'розы', 'роз', 'тюльпан', 'тюльпаны', 'пион', 'пионы', 'хризантема', 'гвоздика', 'лилия', 'орхидея', 'ромашка']
+  for (const flower of flowerNames) {
+    remainingText = remainingText.replace(new RegExp(flower, 'gi'), '')
+  }
+
+  // Убираем служебные слова
+  remainingText = remainingText.replace(/\b(в|на|для|букет|букеты|цветы|цветов|хочу|закажи|покажи|заказать|подобрать|подарить|лучше|лучший)\b/gi, '')
+
+  // Очищаем пробелы и знаки препинания
+  remainingText = remainingText.replace(/[.,!?\s]+/g, ' ').trim()
+
+  console.log('hasQuestion: remaining text after cleanup:', remainingText)
+
+  // Если осталось больше 3 символов — есть вопрос
+  return remainingText.length > 3
+}
+
+// Определяет есть ли новые параметры в извлечённых данных
+function hasNewParams(extractedParams: Partial<ChatParams>): boolean {
+  return !!(
+    extractedParams.city ||
+    extractedParams.recipient ||
+    extractedParams.occasion ||
+    extractedParams.preferences ||
+    extractedParams.price
+  )
+}
+
 // SEARCH_TOOLS больше не используется - режим поиска работает напрямую без Claude tools
 
 // Константы DaData API
@@ -648,16 +755,14 @@ async function searchProducts(params: {
     }
   }
 
-  // 2. Получаем магазины в зоне доставки (параллельно с товарами)
-  const shopsUrl = new URL('https://mcp.cvetov24.ru/api/v1/shops/get_delivery_shops')
-  shopsUrl.searchParams.append('lat', coordinates.lat.toString())
-  shopsUrl.searchParams.append('lon', coordinates.lon.toString())
-
-  // 3. Получаем товары из ОПТИМИЗИРОВАННОГО API (с фильтрами на сервере)
+  // 2. Получаем товары из ОПТИМИЗИРОВАННОГО API (с фильтрами на сервере)
+  // Теперь API поддерживает lat/lon для геофильтрации!
   const catalogUrl = new URL('https://mcp.cvetov24.ru/api/v2/catalog_items_optimized')
   catalogUrl.searchParams.append('parent_category_slug', 'flowers')
   catalogUrl.searchParams.append('include_composition', 'true')
-  catalogUrl.searchParams.append('page_size', '500') // Берём больше, потом фильтруем по магазинам
+  catalogUrl.searchParams.append('lat', coordinates.lat.toString())
+  catalogUrl.searchParams.append('lon', coordinates.lon.toString())
+  catalogUrl.searchParams.append('page_size', '500')
 
   if (params.min_price !== undefined) {
     catalogUrl.searchParams.append('min_price', params.min_price.toString())
@@ -668,26 +773,11 @@ async function searchProducts(params: {
 
   console.log('Fetching from optimized API:', catalogUrl.toString())
 
-  // Запускаем оба запроса параллельно
-  const [shopsResponse, catalogResponse] = await Promise.all([
-    fetch(shopsUrl.toString()),
-    fetch(catalogUrl.toString())
-  ])
+  const catalogResponse = await fetch(catalogUrl.toString())
 
-  console.log(`API requests completed in ${Date.now() - startTime}ms`)
+  console.log(`API request completed in ${Date.now() - startTime}ms`)
 
-  // Обрабатываем магазины
-  let shopGuids = new Set<string>()
-  if (shopsResponse.ok) {
-    const shopsData = await shopsResponse.json()
-    const shops = Array.isArray(shopsData) ? shopsData : (shopsData.shops || [])
-    shopGuids = new Set(shops.map((s: any) => s.guid))
-    console.log(`Found ${shopGuids.size} shops in delivery zone`)
-  } else {
-    console.warn('Failed to fetch shops, skipping delivery zone filter')
-  }
-
-  // Обрабатываем товары
+  // Обрабатываем товары (API уже отфильтровал по координатам!)
   if (!catalogResponse.ok) {
     throw new Error(`Optimized API error: ${catalogResponse.status}`)
   }
@@ -695,14 +785,7 @@ async function searchProducts(params: {
   const catalogData = await catalogResponse.json()
   let products = catalogData.catalog_items || []
 
-  console.log(`Got ${products.length} flowers from optimized API`)
-
-  // 4. Фильтруем по магазинам в зоне доставки
-  if (shopGuids.size > 0) {
-    const beforeFilter = products.length
-    products = products.filter((p: any) => shopGuids.has(p.shop_public_uuid))
-    console.log(`After delivery zone filter: ${products.length} products (was ${beforeFilter})`)
-  }
+  console.log(`Got ${products.length} flowers from optimized API (geo-filtered)`)
 
   // Добавляем поле images
   products = products.map((product: any) => ({
@@ -712,6 +795,8 @@ async function searchProducts(params: {
   }))
 
   // 5. Фильтрация по preferences (используем composition из ответа API)
+  console.log(`Products before preferences filter: ${products.length}`)
+
   if (params.preferences && params.preferences.trim().length > 0) {
     console.log('Filtering by preferences:', params.preferences)
 
@@ -910,10 +995,47 @@ JSON ответ:`
   }
 }
 
-// Helper: извлечь название цветка из "роза белая"
+// Известные названия цветов (в разных формах)
+const KNOWN_FLOWERS = [
+  'роза', 'розы', 'роз',
+  'тюльпан', 'тюльпаны',
+  'пион', 'пионы',
+  'хризантема', 'хризантемы',
+  'гвоздика', 'гвоздики',
+  'лилия', 'лилии',
+  'орхидея', 'орхидеи',
+  'ромашка', 'ромашки',
+  'гербера', 'герберы',
+  'альстромерия', 'альстромерии',
+  'ирис', 'ирисы',
+  'фрезия', 'фрезии',
+  'гиацинт', 'гиацинты',
+  'нарцисс', 'нарциссы',
+  'подсолнух', 'подсолнухи',
+  'эустома', 'эустомы',
+  'гортензия', 'гортензии',
+  'калла', 'каллы',
+  'ранункулюс', 'ранункулюсы',
+  'антуриум', 'антуриумы',
+  'диантус',
+  'эвкалипт',
+  'гипсофила'
+]
+
+// Helper: извлечь название цветка из "роза белая" или "французская роза"
 function extractFlowerName(text: string): string {
+  const textLower = text.toLowerCase()
+
+  // Ищем известное название цветка в тексте
+  for (const flower of KNOWN_FLOWERS) {
+    if (textLower.includes(flower)) {
+      return flower
+    }
+  }
+
+  // Fallback: первое слово (старое поведение)
   const match = text.match(/^(\S+)/)
-  return match ? match[1] : ''
+  return match ? match[1].toLowerCase() : ''
 }
 
 // Helper: извлечь цвет из "роза белая"
@@ -1065,8 +1187,15 @@ function matchesPreferencesByName(
       const flowerNormalized = normalizeFlower(liked.flower)
 
       // Проверяем, есть ли цветок в названии
-      const hasFlower = nameLower.includes(liked.flower.toLowerCase()) ||
-                        nameLower.includes(flowerNormalized)
+      // Исключаем ложные срабатывания: "розовый" не должен считаться "розой"
+      let hasFlower = nameLower.includes(liked.flower.toLowerCase()) ||
+                      nameLower.includes(flowerNormalized)
+
+      // Проверка на ложное срабатывание "розов" (розовый/розовая/розовых)
+      if (hasFlower && flowerNormalized === 'роз' && nameLower.includes('розов')) {
+        // Проверяем есть ли настоящая роза, а не только "розовый"
+        hasFlower = /роз[аыеу]|роз\b/i.test(nameLower)
+      }
 
       if (!hasFlower) return false
 
@@ -1306,30 +1435,83 @@ export const chat = functions
         let assistantMessage = ''
         let products: any[] | undefined = undefined
 
-        // ЕСЛИ ВСЕ ПАРАМЕТРЫ СОБРАНЫ - СРАЗУ ПОКАЗЫВАЕМ ТОВАРЫ БЕЗ ВЫЗОВА CLAUDE
+        // ЕСЛИ ВСЕ ПАРАМЕТРЫ СОБРАНЫ - определяем что делать
         if (readyForSearch) {
-          console.log('All params collected, searching products directly...')
+          const hasQ = hasQuestion(userMessageText, extractedParams)
+          const hasParams = hasNewParams(extractedParams)
+
+          console.log('Search mode - hasQuestion:', hasQ, 'hasNewParams:', hasParams)
 
           try {
-            // Вызываем поиск товаров напрямую
-            products = await searchProducts({
-              city: params.city,
-              delivery_address: params.delivery_address,
-              recipient: params.recipient,
-              occasion: params.occasion,
-              preferences: params.preferences,
-              min_price: params.price ? extractMinPrice(params.price) : undefined,
-              max_price: params.price ? extractMaxPrice(params.price) : undefined,
-            })
+            if (!hasQ && !hasParams) {
+              // Нет вопроса и нет параметров → спрашиваем что нужно
+              console.log('No question and no params - asking what user needs')
+              const questionPrompt = getQuestionPrompt(params)
+              const claudeResponse = await anthropic.messages.create({
+                model: 'claude-3-5-haiku-20241022',
+                max_tokens: 512,
+                messages: anthropicMessages,
+                system: questionPrompt,
+              })
+              assistantMessage = claudeResponse.content[0].type === 'text' ? claudeResponse.content[0].text : ''
+              // products остаётся undefined — товары НЕ показываем
 
-            console.log(`Found ${products.length} products`)
+            } else if (hasQ && !hasParams) {
+              // Есть вопрос, но нет параметров → только ответ, без товаров
+              console.log('Question without params - answering without products')
+              const questionPrompt = getQuestionPrompt(params)
+              const claudeResponse = await anthropic.messages.create({
+                model: 'claude-3-5-haiku-20241022',
+                max_tokens: 512,
+                messages: anthropicMessages,
+                system: questionPrompt,
+              })
+              assistantMessage = claudeResponse.content[0].type === 'text' ? claudeResponse.content[0].text : ''
+              // products остаётся undefined
 
-            assistantMessage = products.length > 0
-              ? generateProductListMessage(products.length, params.preferences || undefined)
-              : generateNoProductsMessage(params.preferences || undefined)
+            } else if (!hasQ && hasParams) {
+              // Нет вопроса, есть параметры → только товары
+              console.log('Params without question - showing products only')
+              products = await searchProducts({
+                city: params.city,
+                delivery_address: params.delivery_address,
+                recipient: params.recipient,
+                occasion: params.occasion,
+                preferences: params.preferences,
+                min_price: params.price ? extractMinPrice(params.price) : undefined,
+                max_price: params.price ? extractMaxPrice(params.price) : undefined,
+              })
+              console.log(`Found ${products.length} products`)
+              assistantMessage = products.length > 0
+                ? generateProductListMessage(products.length, params.preferences || undefined)
+                : generateNoProductsMessage(params.preferences || undefined)
+
+            } else {
+              // hasQ && hasParams → ответ + товары
+              console.log('Question with params - answering and showing products')
+              const questionPrompt = getQuestionPrompt(params)
+              const claudeResponse = await anthropic.messages.create({
+                model: 'claude-3-5-haiku-20241022',
+                max_tokens: 512,
+                messages: anthropicMessages,
+                system: questionPrompt,
+              })
+              assistantMessage = claudeResponse.content[0].type === 'text' ? claudeResponse.content[0].text : ''
+
+              products = await searchProducts({
+                city: params.city,
+                delivery_address: params.delivery_address,
+                recipient: params.recipient,
+                occasion: params.occasion,
+                preferences: params.preferences,
+                min_price: params.price ? extractMinPrice(params.price) : undefined,
+                max_price: params.price ? extractMaxPrice(params.price) : undefined,
+              })
+              console.log(`Found ${products.length} products`)
+            }
           } catch (error) {
-            console.error('Error searching products:', error)
-            assistantMessage = 'Извините, произошла ошибка при поиске товаров. Попробуйте еще раз.'
+            console.error('Error in search mode:', error)
+            assistantMessage = 'Извините, произошла ошибка. Попробуйте еще раз.'
           }
         } else {
           // РЕЖИМ КОНСУЛЬТАЦИИ - вызываем Claude для сбора параметров
