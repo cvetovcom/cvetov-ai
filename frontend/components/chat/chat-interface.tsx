@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Mic, User, Settings, Menu, X } from 'lucide-react';
+import { MessageSquare, Mic, User, Settings, Menu, X, LogIn, Lock } from 'lucide-react';
 import { useChatStore } from '@/lib/store/chat-store';
 import { ParamsProgress } from './params-progress';
 import { MessageBubble } from './message-bubble';
@@ -36,6 +36,13 @@ export function ChatInterface() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [loadingStatusMessage, setLoadingStatusMessage] = useState<string>('');
+
+  // Состояния для попапов меню
+  const [showAccountPopup, setShowAccountPopup] = useState(false);
+  const [showSettingsPopup, setShowSettingsPopup] = useState(false);
+
+  // Проверка авторизации
+  const isAuthenticated = !!telegramUser;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Feature flag для прямых ссылок на cvetov.com
@@ -67,6 +74,7 @@ export function ChatInterface() {
     getTotalPrice,
     setCheckoutOpen,
     setLoading,
+    resetSession,
   } = useChatStore();
 
   // Auto-scroll to bottom when messages change
@@ -246,12 +254,22 @@ export function ChatInterface() {
     speak(text);
   };
 
+  // Обработка "Новый чат"
+  const handleNewChat = () => {
+    resetSession();
+    setShowChat(false);
+    setShowSidebar(false);
+  };
+
   return (
     <div className="flex bg-gray-900" style={{ height: '100dvh' }}>
       {/* Sidebar - Desktop */}
       <div className="hidden lg:flex flex-col w-64 bg-gray-900 border-r border-gray-700">
         <div className="p-4 border-b border-gray-700">
-          <Button className="w-full bg-gray-800 hover:bg-gray-700 text-white">
+          <Button
+            className="w-full bg-gray-800 hover:bg-gray-700 text-white"
+            onClick={handleNewChat}
+          >
             <MessageSquare className="w-4 h-4 mr-2" />
             Новый чат
           </Button>
@@ -259,14 +277,47 @@ export function ChatInterface() {
 
         <div className="flex-1 overflow-y-auto p-3">
           <p className="text-xs text-gray-500 px-3 mb-2">История</p>
+          {!isAuthenticated ? (
+            <div className="px-3 py-4 text-center">
+              <Lock className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">
+                История доступна при авторизации
+              </p>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500 px-3">
+              {/* TODO: Список чатов из истории */}
+              <p className="text-gray-600">Нет сохранённых чатов</p>
+            </div>
+          )}
         </div>
 
         <div className="p-3 border-t border-gray-700">
-          <Button variant="ghost" className="w-full justify-start text-white hover:bg-gray-800 mb-1">
-            <User className="w-4 h-4 mr-3" />
-            Аккаунт
-          </Button>
-          <Button variant="ghost" className="w-full justify-start text-white hover:bg-gray-800">
+          {isAuthenticated ? (
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-white hover:bg-gray-800 mb-1"
+              onClick={() => setShowAccountPopup(true)}
+            >
+              <User className="w-4 h-4 mr-3" />
+              Аккаунт
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-gray-400 hover:bg-gray-800 mb-1"
+              disabled
+            >
+              <LogIn className="w-4 h-4 mr-3" />
+              Войти
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            className={`w-full justify-start hover:bg-gray-800 ${isAuthenticated ? 'text-white' : 'text-gray-600 cursor-not-allowed'}`}
+            disabled={!isAuthenticated}
+            onClick={() => isAuthenticated && setShowSettingsPopup(true)}
+          >
             <Settings className="w-4 h-4 mr-3" />
             Настройки
           </Button>
@@ -279,7 +330,10 @@ export function ChatInterface() {
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowSidebar(false)} />
           <div className="absolute left-0 top-0 bottom-0 w-64 bg-gray-900 flex flex-col">
             <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-              <Button className="flex-1 bg-gray-800 hover:bg-gray-700 text-white mr-2">
+              <Button
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white mr-2"
+                onClick={handleNewChat}
+              >
                 <MessageSquare className="w-4 h-4 mr-2" />
                 Новый чат
               </Button>
@@ -295,14 +349,55 @@ export function ChatInterface() {
 
             <div className="flex-1 overflow-y-auto p-3">
               <p className="text-xs text-gray-500 px-3 mb-2">История</p>
+              {!isAuthenticated ? (
+                <div className="px-3 py-4 text-center">
+                  <Lock className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">
+                    История доступна при авторизации
+                  </p>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500 px-3">
+                  {/* TODO: Список чатов из истории */}
+                  <p className="text-gray-600">Нет сохранённых чатов</p>
+                </div>
+              )}
             </div>
 
             <div className="p-3 border-t border-gray-700">
-              <Button variant="ghost" className="w-full justify-start text-white hover:bg-gray-800 mb-1">
-                <User className="w-4 h-4 mr-3" />
-                Аккаунт
-              </Button>
-              <Button variant="ghost" className="w-full justify-start text-white hover:bg-gray-800">
+              {isAuthenticated ? (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-white hover:bg-gray-800 mb-1"
+                  onClick={() => {
+                    setShowAccountPopup(true);
+                    setShowSidebar(false);
+                  }}
+                >
+                  <User className="w-4 h-4 mr-3" />
+                  Аккаунт
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-gray-400 hover:bg-gray-800 mb-1"
+                  disabled
+                >
+                  <LogIn className="w-4 h-4 mr-3" />
+                  Войти
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                className={`w-full justify-start hover:bg-gray-800 ${isAuthenticated ? 'text-white' : 'text-gray-600 cursor-not-allowed'}`}
+                disabled={!isAuthenticated}
+                onClick={() => {
+                  if (isAuthenticated) {
+                    setShowSettingsPopup(true);
+                    setShowSidebar(false);
+                  }
+                }}
+              >
                 <Settings className="w-4 h-4 mr-3" />
                 Настройки
               </Button>
@@ -474,6 +569,96 @@ export function ChatInterface() {
           onSubmit={handleSubmitOrder}
           getTotalPrice={getTotalPrice}
         />
+      )}
+
+      {/* Account Popup */}
+      {showAccountPopup && telegramUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowAccountPopup(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <button
+              onClick={() => setShowAccountPopup(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
+                {telegramUser.photo_url ? (
+                  <img
+                    src={telegramUser.photo_url}
+                    alt="Avatar"
+                    className="w-20 h-20 rounded-full"
+                  />
+                ) : (
+                  <User className="w-10 h-10 text-gray-400" />
+                )}
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900">
+                {telegramUser.first_name} {telegramUser.last_name || ''}
+              </h3>
+              {telegramUser.username && (
+                <p className="text-gray-500">@{telegramUser.username}</p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">ID</span>
+                <span className="text-gray-900">{telegramUser.id}</span>
+              </div>
+              {telegramUser.language_code && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Язык</span>
+                  <span className="text-gray-900">{telegramUser.language_code.toUpperCase()}</span>
+                </div>
+              )}
+            </div>
+
+            <Button
+              variant="outline"
+              className="w-full mt-6 text-red-600 border-red-200 hover:bg-red-50"
+              onClick={() => {
+                // TODO: Implement logout
+                setShowAccountPopup(false);
+              }}
+            >
+              Выйти
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Popup */}
+      {showSettingsPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowSettingsPopup(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <button
+              onClick={() => setShowSettingsPopup(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Настройки</h3>
+
+            <div className="flex border-b border-gray-200 mb-4">
+              <button className="flex-1 py-2 text-sm font-medium text-gray-400 cursor-not-allowed">
+                Общее
+              </button>
+              <button className="flex-1 py-2 text-sm font-medium text-gray-400 cursor-not-allowed">
+                Уведомления
+              </button>
+            </div>
+
+            <div className="text-center py-8 text-gray-500">
+              <Settings className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>Настройки будут доступны в следующем обновлении</p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
