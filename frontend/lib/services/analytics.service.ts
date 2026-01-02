@@ -25,6 +25,17 @@ interface AnalyticsParams {
   [key: string]: string | number | boolean | undefined;
 }
 
+// Очередь событий для отложенной отправки
+interface QueuedEvent {
+  type: 'goal' | 'params';
+  goal?: string;
+  params?: AnalyticsParams;
+}
+
+const eventQueue: QueuedEvent[] = [];
+let isProcessingQueue = false;
+let metrikaCheckInterval: NodeJS.Timeout | null = null;
+
 /**
  * Проверяет доступность Яндекс.Метрики
  */
@@ -34,19 +45,82 @@ function isMetrikaAvailable(): boolean {
 }
 
 /**
+ * Обрабатывает очередь событий когда Метрика загрузится
+ */
+function processQueue(): void {
+  if (!isMetrikaAvailable() || isProcessingQueue) return;
+
+  isProcessingQueue = true;
+
+  while (eventQueue.length > 0) {
+    const event = eventQueue.shift();
+    if (!event) continue;
+
+    try {
+      if (event.type === 'goal' && event.goal) {
+        (window as any).ym(METRIKA_ID, 'reachGoal', event.goal, event.params);
+        console.log('[Analytics] Цель из очереди отправлена:', event.goal, event.params);
+      } else if (event.type === 'params' && event.params) {
+        (window as any).ym(METRIKA_ID, 'params', event.params);
+        console.log('[Analytics] Параметры из очереди отправлены:', event.params);
+      }
+    } catch (error) {
+      console.error('[Analytics] Ошибка отправки из очереди:', error);
+    }
+  }
+
+  isProcessingQueue = false;
+
+  // Останавливаем интервал проверки если очередь пуста
+  if (metrikaCheckInterval) {
+    clearInterval(metrikaCheckInterval);
+    metrikaCheckInterval = null;
+  }
+}
+
+/**
+ * Запускает периодическую проверку загрузки Метрики
+ */
+function startMetrikaCheck(): void {
+  if (metrikaCheckInterval) return;
+
+  metrikaCheckInterval = setInterval(() => {
+    if (isMetrikaAvailable()) {
+      processQueue();
+    }
+  }, 100); // Проверяем каждые 100мс
+
+  // Таймаут на 10 секунд - если Метрика не загрузилась, прекращаем попытки
+  setTimeout(() => {
+    if (metrikaCheckInterval) {
+      clearInterval(metrikaCheckInterval);
+      metrikaCheckInterval = null;
+      if (eventQueue.length > 0) {
+        console.warn('[Analytics] Метрика не загрузилась за 10 секунд, события потеряны:', eventQueue.length);
+        eventQueue.length = 0;
+      }
+    }
+  }, 10000);
+}
+
+/**
  * Отправляет цель в Яндекс.Метрику
  */
 export function reachGoal(goal: string, params?: AnalyticsParams): void {
-  if (!isMetrikaAvailable()) {
-    console.log('[Analytics] Метрика недоступна, цель:', goal, params);
-    return;
-  }
+  if (typeof window === 'undefined') return;
 
-  try {
-    (window as any).ym(METRIKA_ID, 'reachGoal', goal, params);
-    console.log('[Analytics] Цель отправлена:', goal, params);
-  } catch (error) {
-    console.error('[Analytics] Ошибка отправки цели:', error);
+  if (isMetrikaAvailable()) {
+    try {
+      (window as any).ym(METRIKA_ID, 'reachGoal', goal, params);
+      console.log('[Analytics] Цель отправлена:', goal, params);
+    } catch (error) {
+      console.error('[Analytics] Ошибка отправки цели:', error);
+    }
+  } else {
+    // Добавляем в очередь
+    eventQueue.push({ type: 'goal', goal, params });
+    console.log('[Analytics] Цель добавлена в очередь:', goal, params);
+    startMetrikaCheck();
   }
 }
 
@@ -54,16 +128,20 @@ export function reachGoal(goal: string, params?: AnalyticsParams): void {
  * Отправляет событие в Яндекс.Метрику (для параметров визитов)
  */
 export function trackParams(params: AnalyticsParams): void {
-  if (!isMetrikaAvailable()) {
-    console.log('[Analytics] Метрика недоступна, параметры:', params);
-    return;
-  }
+  if (typeof window === 'undefined') return;
 
-  try {
-    (window as any).ym(METRIKA_ID, 'params', params);
-    console.log('[Analytics] Параметры отправлены:', params);
-  } catch (error) {
-    console.error('[Analytics] Ошибка отправки параметров:', error);
+  if (isMetrikaAvailable()) {
+    try {
+      (window as any).ym(METRIKA_ID, 'params', params);
+      console.log('[Analytics] Параметры отправлены:', params);
+    } catch (error) {
+      console.error('[Analytics] Ошибка отправки параметров:', error);
+    }
+  } else {
+    // Добавляем в очередь
+    eventQueue.push({ type: 'params', params });
+    console.log('[Analytics] Параметры добавлены в очередь:', params);
+    startMetrikaCheck();
   }
 }
 
