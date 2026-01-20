@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Share2 } from 'lucide-react';
 import type { MCPProduct } from '@/types';
 import { getThumbnailUrl } from '@/lib/utils/image-utils';
 import { trackProductLinkClick, trackProductClick, addUtmParams } from '@/lib/services/analytics.service';
@@ -7,9 +8,10 @@ import { trackProductLinkClick, trackProductClick, addUtmParams } from '@/lib/se
 interface ProductCardProps {
   product: MCPProduct;
   onSelect: (product: MCPProduct) => void;
+  onShare?: (product: MCPProduct, url: string) => void;
 }
 
-export function ProductCard({ product, onSelect }: ProductCardProps) {
+export function ProductCard({ product, onSelect, onShare }: ProductCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [images, setImages] = useState<string[]>(
     product.images && product.images.length > 0
@@ -143,29 +145,40 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
               </span>
             )}
           </div>
-          {enableDirectLinks ? (
-            <a
-              href={getProductUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={handleProductLinkClick}
-              className="inline-flex items-center justify-center bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 flex-shrink-0 rounded-md text-sm font-medium transition-colors"
-            >
-              Купить
-            </a>
-          ) : (
-            <Button
-              onClick={() => {
-                // Отслеживаем клик на кнопку "Купить"
-                trackProductClick(product.name, product.price.final_price, product.shop_name);
-                onSelect(product);
-              }}
-              size="sm"
-              className="bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 flex-shrink-0"
-            >
-              Купить
-            </Button>
-          )}
+          <div className="flex gap-1 flex-shrink-0">
+            {onShare && (
+              <button
+                onClick={() => onShare(product, getProductUrl())}
+                className="inline-flex items-center justify-center text-gray-500 hover:text-gray-700 h-8 w-8 rounded-md transition-colors"
+                title="Поделиться"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+            )}
+            {enableDirectLinks ? (
+              <a
+                href={getProductUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleProductLinkClick}
+                className="inline-flex items-center justify-center bg-gray-800 hover:bg-gray-700 text-white h-8 px-3 rounded-md text-sm font-medium transition-colors"
+              >
+                Купить
+              </a>
+            ) : (
+              <Button
+                onClick={() => {
+                  // Отслеживаем клик на кнопку "Купить"
+                  trackProductClick(product.name, product.price.final_price, product.shop_name);
+                  onSelect(product);
+                }}
+                size="sm"
+                className="bg-gray-800 hover:bg-gray-700 text-white h-8 px-3"
+              >
+                Купить
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

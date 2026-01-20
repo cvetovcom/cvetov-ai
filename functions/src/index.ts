@@ -1586,3 +1586,6 @@ export { saveTelegramUser, getTelegramStats, sendBroadcast } from './telegram-us
 
 // Export Telegram bot webhook
 export { telegramWebhook } from './telegram-bot'
+
+// Export MAX user functions
+export { saveMaxUser, getMaxStats } from './max-user'

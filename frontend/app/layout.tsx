@@ -66,7 +66,10 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <head>
+        {/* Telegram Web App */}
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        {/* MAX Web App */}
+        <script src="https://st.max.ru/js/max-web-app.js"></script>
       </head>
       <body className={inter.className}>
         {/* Structured Data (JSON-LD) для поисковиков */}

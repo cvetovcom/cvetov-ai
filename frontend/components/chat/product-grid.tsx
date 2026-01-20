@@ -6,6 +6,7 @@ import { Copy, Tag } from 'lucide-react';
 interface ProductGridProps {
   products: MCPProduct[];
   onSelectProduct: (product: MCPProduct) => void;
+  onShareProduct?: (product: MCPProduct, url: string) => void;
   citySlug?: string;
 }
 
@@ -13,7 +14,7 @@ const INITIAL_VISIBLE = 4;
 const LOAD_MORE_COUNT = 4;
 const MAX_VISIBLE = 16;
 
-export function ProductGrid({ products, onSelectProduct, citySlug }: ProductGridProps) {
+export function ProductGrid({ products, onSelectProduct, onShareProduct, citySlug }: ProductGridProps) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
   const [copied, setCopied] = useState(false);
 
@@ -46,6 +47,7 @@ export function ProductGrid({ products, onSelectProduct, citySlug }: ProductGrid
             key={product.guid || `product-${index}`}
             product={product}
             onSelect={onSelectProduct}
+            onShare={onShareProduct}
           />
         ))}
       </div>

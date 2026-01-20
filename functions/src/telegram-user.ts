@@ -80,7 +80,7 @@ export const saveTelegramUser = functions
   }
 
   try {
-    const { initData, user } = req.body
+    const { initData, user, phone } = req.body
 
     if (!user || !user.id) {
       res.status(400).json({ error: 'User data is required' })
@@ -109,27 +109,43 @@ export const saveTelegramUser = functions
     // Сохраняем или обновляем пользователя в Firestore
     const userRef = db.collection('telegram_users').doc(String(user.id))
 
-    await userRef.set({
+    const userData: any = {
       ...telegramUser,
       miniapp_opened: true,  // Флаг, что пользователь открывал Mini App
       first_seen: admin.firestore.FieldValue.serverTimestamp(),
       last_seen: admin.firestore.FieldValue.serverTimestamp(),
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true })
+    }
+
+    // Добавляем телефон если есть
+    if (phone) {
+      userData.phone = phone
+      userData.phone_received_at = admin.firestore.FieldValue.serverTimestamp()
+    }
+
+    await userRef.set(userData, { merge: true })
 
     // Обновляем счетчик визитов
-    await userRef.update({
+    const updateData: any = {
       visit_count: admin.firestore.FieldValue.increment(1),
       last_seen: admin.firestore.FieldValue.serverTimestamp(),
       miniapp_opened: true,
-    })
+    }
 
-    console.log(`Telegram user saved: ${user.id} (@${user.username || 'no_username'})`)
+    if (phone) {
+      updateData.phone = phone
+      updateData.phone_received_at = admin.firestore.FieldValue.serverTimestamp()
+    }
+
+    await userRef.update(updateData)
+
+    console.log(`Telegram user saved: ${user.id} (@${user.username || 'no_username'})${phone ? ' with phone' : ''}`)
 
     res.json({
       success: true,
       message: 'User saved successfully',
       userId: user.id,
+      hasPhone: !!phone,
     })
   } catch (error) {
     console.error('Error saving Telegram user:', error)

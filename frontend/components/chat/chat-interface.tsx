@@ -12,8 +12,7 @@ import { ProductGrid } from './product-grid';
 import { ShoppingCart } from './shopping-cart';
 import { CheckoutModal } from './checkout-modal';
 import { TypingIndicator } from './typing-indicator';
-import { useSpeechRecognition, useSpeechSynthesis } from '@/lib/hooks';
-import { useTelegramUser } from '@/lib/hooks/useTelegramUser';
+import { useSpeechRecognition, useSpeechSynthesis, useWebAppUser } from '@/lib/hooks';
 import { sendChatMessage } from '@/lib/services/chat-api.service';
 import {
   trackChatStarted,
@@ -31,8 +30,8 @@ import type { MCPProduct } from '@/types';
 import Image from 'next/image';
 
 export function ChatInterface() {
-  // Telegram Web App integration
-  const { user: telegramUser, isLoading: isTelegramLoading, isTelegram } = useTelegramUser();
+  // WebApp integration (Telegram & MAX)
+  const { user: webAppUser, phone: userPhone, platform, isLoading: isWebAppLoading, isWebApp, requestPhone, shareContent } = useWebAppUser();
   const [showSidebar, setShowSidebar] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [loadingStatusMessage, setLoadingStatusMessage] = useState<string>('');
@@ -40,9 +39,13 @@ export function ChatInterface() {
   // Состояния для попапов меню
   const [showAccountPopup, setShowAccountPopup] = useState(false);
   const [showSettingsPopup, setShowSettingsPopup] = useState(false);
+  const [isRequestingPhone, setIsRequestingPhone] = useState(false);
 
-  // Проверка авторизации
-  const isAuthenticated = !!telegramUser;
+  // Проверка авторизации и платформы
+  const isMax = platform === 'max';
+  const isTelegram = platform === 'telegram';
+  // Для MAX и Telegram авторизация требует телефон
+  const isAuthenticated = (isMax || isTelegram) ? !!(webAppUser && userPhone) : !!webAppUser;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Feature flag для прямых ссылок на cvetov.com
@@ -198,8 +201,30 @@ export function ChatInterface() {
     handleSendMessage(reply);
   };
 
+  // Запрос телефона для MAX
+  const handleRequestPhone = async () => {
+    if (!isMax || userPhone || isRequestingPhone) return;
+
+    setIsRequestingPhone(true);
+    try {
+      const phone = await requestPhone();
+      if (phone) {
+        console.log('[MAX] Phone received:', phone.slice(0, 5) + '****');
+      }
+    } catch (error) {
+      console.error('[MAX] Phone request error:', error);
+    } finally {
+      setIsRequestingPhone(false);
+    }
+  };
+
   // Обработка выбора товара
-  const handleSelectProduct = (product: MCPProduct) => {
+  const handleSelectProduct = async (product: MCPProduct) => {
+    // Для MAX и Telegram запрашиваем телефон при первом клике "Купить"
+    if ((isMax || isTelegram) && !userPhone) {
+      await handleRequestPhone();
+    }
+
     addToCart(product);
 
     // Отслеживаем добавление в корзину
@@ -208,6 +233,17 @@ export function ChatInterface() {
     addMessage('Товар добавлен в корзину! Хотите продолжить выбор?', 'assistant', {
       quickReplies: ['Показать ещё', 'Изменить параметры'],
     });
+  };
+
+  // Обработка шеринга товара
+  const handleShareProduct = async (product: MCPProduct, url: string) => {
+    const text = `${product.name} — ${Math.floor(product.price.final_price).toLocaleString('ru-RU')} ₽`;
+    const success = await shareContent(text, url);
+
+    if (success && platform === 'web') {
+      // В браузере показываем уведомление что ссылка скопирована
+      addMessage('Ссылка на букет скопирована!', 'assistant');
+    }
   };
 
   // Обработка обновления количества в корзине
@@ -245,6 +281,12 @@ export function ChatInterface() {
 
   // Обработка голосового ввода
   const handleVoiceInput = () => {
+    // В MAX голосовой ввод не поддерживается
+    if (isMax) {
+      addMessage('Голосовой ввод пока недоступен в MAX. Используйте текстовый ввод.', 'assistant');
+      setShowChat(true);
+      return;
+    }
     setShowChat(true);
     toggleListening();
   };
@@ -301,6 +343,17 @@ export function ChatInterface() {
             >
               <User className="w-4 h-4 mr-3" />
               Аккаунт
+              {(isMax || isTelegram) && userPhone && <span className="ml-auto text-xs text-green-400">✓</span>}
+            </Button>
+          ) : (isMax || isTelegram) ? (
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-white hover:bg-gray-800 mb-1"
+              onClick={handleRequestPhone}
+              disabled={isRequestingPhone}
+            >
+              <LogIn className="w-4 h-4 mr-3" />
+              {isRequestingPhone ? 'Запрос...' : 'Войти'}
             </Button>
           ) : (
             <Button
@@ -376,6 +429,20 @@ export function ChatInterface() {
                 >
                   <User className="w-4 h-4 mr-3" />
                   Аккаунт
+                  {(isMax || isTelegram) && userPhone && <span className="ml-auto text-xs text-green-400">✓</span>}
+                </Button>
+              ) : (isMax || isTelegram) ? (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-white hover:bg-gray-800 mb-1"
+                  onClick={() => {
+                    handleRequestPhone();
+                    setShowSidebar(false);
+                  }}
+                  disabled={isRequestingPhone}
+                >
+                  <LogIn className="w-4 h-4 mr-3" />
+                  {isRequestingPhone ? 'Запрос...' : 'Войти'}
                 </Button>
               ) : (
                 <Button
@@ -510,6 +577,7 @@ export function ChatInterface() {
                         <ProductGrid
                           products={message.products}
                           onSelectProduct={handleSelectProduct}
+                          onShareProduct={handleShareProduct}
                           citySlug={session.params.city?.slug}
                         />
                       )}
@@ -572,7 +640,7 @@ export function ChatInterface() {
       )}
 
       {/* Account Popup */}
-      {showAccountPopup && telegramUser && (
+      {showAccountPopup && webAppUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowAccountPopup(false)} />
           <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
@@ -585,9 +653,9 @@ export function ChatInterface() {
 
             <div className="text-center mb-6">
               <div className="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                {telegramUser.photo_url ? (
+                {webAppUser.photo_url ? (
                   <img
-                    src={telegramUser.photo_url}
+                    src={webAppUser.photo_url}
                     alt="Avatar"
                     className="w-20 h-20 rounded-full"
                   />
@@ -596,24 +664,44 @@ export function ChatInterface() {
                 )}
               </div>
               <h3 className="text-xl font-semibold text-gray-900">
-                {telegramUser.first_name} {telegramUser.last_name || ''}
+                {webAppUser.first_name} {webAppUser.last_name || ''}
               </h3>
-              {telegramUser.username && (
-                <p className="text-gray-500">@{telegramUser.username}</p>
+              {webAppUser.username && (
+                <p className="text-gray-500">@{webAppUser.username}</p>
               )}
             </div>
 
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">ID</span>
-                <span className="text-gray-900">{telegramUser.id}</span>
+                <span className="text-gray-900">{webAppUser.id}</span>
               </div>
-              {telegramUser.language_code && (
+              {webAppUser.language_code && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Язык</span>
-                  <span className="text-gray-900">{telegramUser.language_code.toUpperCase()}</span>
+                  <span className="text-gray-900">{webAppUser.language_code.toUpperCase()}</span>
                 </div>
               )}
+              {(isMax || isTelegram) && (
+                <div className="flex justify-between text-sm items-center">
+                  <span className="text-gray-500">Телефон</span>
+                  {userPhone ? (
+                    <span className="text-gray-900">{userPhone}</span>
+                  ) : (
+                    <button
+                      onClick={handleRequestPhone}
+                      disabled={isRequestingPhone}
+                      className="text-blue-600 hover:text-blue-700 text-sm"
+                    >
+                      {isRequestingPhone ? 'Запрос...' : 'Добавить'}
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Платформа</span>
+                <span className="text-gray-900">{isMax ? 'MAX' : isTelegram ? 'Telegram' : 'Web'}</span>
+              </div>
             </div>
 
             <Button
