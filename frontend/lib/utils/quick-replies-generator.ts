@@ -11,7 +11,7 @@ export function generateQuickReplies(params: SessionParams): string[] {
 
   // Этап 2: Собираем повод
   if (!params.occasion) {
-    return ['День рождения', 'Юбилей', '8 Марта', 'Просто так'];
+    return ['День рождения', 'Юбилей', '14 февраля ❤️', 'Просто так'];
   }
   
   // Этап 3: Собираем город
