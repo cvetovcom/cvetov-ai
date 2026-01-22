@@ -122,9 +122,23 @@ export function ProductCard({ product, onSelect, onShare }: ProductCardProps) {
           </div>
         )}
 
+        {/* Share Button - top right */}
+        {onShare && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onShare(product, getProductUrl());
+            }}
+            className="absolute top-2 right-2 bg-white/80 hover:bg-white text-gray-700 p-1.5 rounded-full shadow-sm transition-colors"
+            title="Поделиться"
+          >
+            <Share2 className="w-4 h-4" />
+          </button>
+        )}
+
         {/* Discount Badge */}
         {(product.price.discount ?? 0) > 0 && (
-          <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
+          <div className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
             -{product.price.discount}%
           </div>
         )}
@@ -146,15 +160,6 @@ export function ProductCard({ product, onSelect, onShare }: ProductCardProps) {
             )}
           </div>
           <div className="flex gap-1 flex-shrink-0">
-            {onShare && (
-              <button
-                onClick={() => onShare(product, getProductUrl())}
-                className="inline-flex items-center justify-center text-gray-500 hover:text-gray-700 h-8 w-8 rounded-md transition-colors"
-                title="Поделиться"
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
-            )}
             {enableDirectLinks ? (
               <a
                 href={getProductUrl()}

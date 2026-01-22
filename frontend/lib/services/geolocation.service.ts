@@ -5,9 +5,29 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/reverse';
 const IP_API_URL = 'http://ip-api.com/json/?lang=ru&fields=city';
 
 /**
+ * Проверяет, запущено ли приложение в MAX Mini App
+ */
+function isMaxPlatform(): boolean {
+  if (typeof window === 'undefined') return false;
+  return !!(window as any).WebApp?.initDataUnsafe?.user;
+}
+
+/**
  * Определяет город пользователя с использованием Browser API и IP fallback
  */
 export async function detectUserCity(): Promise<string> {
+  // В MAX Mini App browser geolocation не работает, используем только IP
+  if (isMaxPlatform()) {
+    console.log('[Geolocation] MAX platform detected, using IP-based location');
+    try {
+      const city = await getCityByIP();
+      return normalizeCity(city);
+    } catch (ipError) {
+      console.error('IP geolocation failed:', ipError);
+      throw new Error('Не удалось определить местоположение');
+    }
+  }
+
   try {
     // Попытка 1: Browser Geolocation API
     const coords = await getBrowserLocation();

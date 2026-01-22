@@ -220,11 +220,6 @@ export function ChatInterface() {
 
   // Обработка выбора товара
   const handleSelectProduct = async (product: MCPProduct) => {
-    // Для MAX и Telegram запрашиваем телефон при первом клике "Купить"
-    if ((isMax || isTelegram) && !userPhone) {
-      await handleRequestPhone();
-    }
-
     addToCart(product);
 
     // Отслеживаем добавление в корзину
