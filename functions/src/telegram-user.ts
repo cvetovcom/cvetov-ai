@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions'
 import * as admin from 'firebase-admin'
 import crypto from 'crypto'
+import { sendContactToMautic } from './mautic.service'
 
 const db = admin.firestore()
 
@@ -140,6 +141,17 @@ export const saveTelegramUser = functions
     await userRef.update(updateData)
 
     console.log(`Telegram user saved: ${user.id} (@${user.username || 'no_username'})${phone ? ' with phone' : ''}`)
+
+    // Отправляем контакт в Mautic если есть телефон
+    if (phone) {
+      await sendContactToMautic({
+        phone: phone,
+        firstname: user.first_name,
+        lastname: user.last_name,
+        telegram_id: String(user.id),
+        tags: ['telegram', 'miniapp'],
+      })
+    }
 
     res.json({
       success: true,

@@ -1,5 +1,6 @@
 import * as functions from 'firebase-functions'
 import * as admin from 'firebase-admin'
+import { sendContactToMautic } from './mautic.service'
 
 const db = admin.firestore()
 
@@ -89,6 +90,17 @@ export const saveMaxUser = functions
 
         await userRef.update(updateData)
         console.log(`MAX user updated: ${user.id} (@${user.username || 'no_username'})`)
+      }
+
+      // Отправляем контакт в Mautic если есть телефон
+      if (phone) {
+        await sendContactToMautic({
+          phone: phone,
+          firstname: user.first_name,
+          lastname: user.last_name,
+          max_id: String(user.id),
+          tags: ['max', 'miniapp'],
+        })
       }
 
       res.json({
