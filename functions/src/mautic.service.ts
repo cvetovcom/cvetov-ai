@@ -13,6 +13,7 @@ interface MauticContact {
   lastname?: string
   telegram_id?: string
   max_id?: string
+  preferred_platform?: 'telegram_miniapp' | 'max_miniapp'
   tags?: string[]
 }
 
@@ -55,6 +56,10 @@ export async function sendContactToMautic(contact: MauticContact): Promise<boole
 
     if (contact.max_id) {
       contactData.max_id = contact.max_id
+    }
+
+    if (contact.preferred_platform) {
+      contactData.preferred_platform = contact.preferred_platform
     }
 
     if (contact.tags && contact.tags.length > 0) {

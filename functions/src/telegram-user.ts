@@ -149,6 +149,7 @@ export const saveTelegramUser = functions
         firstname: user.first_name,
         lastname: user.last_name,
         telegram_id: String(user.id),
+        preferred_platform: 'telegram_miniapp',
         tags: ['telegram', 'miniapp'],
       })
     }

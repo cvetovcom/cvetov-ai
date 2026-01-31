@@ -99,6 +99,7 @@ export const saveMaxUser = functions
           firstname: user.first_name,
           lastname: user.last_name,
           max_id: String(user.id),
+          preferred_platform: 'max_miniapp',
           tags: ['max', 'miniapp'],
         })
       }
